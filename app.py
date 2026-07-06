@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from steamrec.candidates import FRESH_CANDIDATES
-from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
+from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, DEEPSEEK_API_KEY, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
+from steamrec.deepseek import refine_recommendations
 from steamrec.models import RecommendRequest, RecommendResponse
 from steamrec.recommender import build_group_taste, candidate_source_map, owned_appids, score_candidates
 from steamrec.steam_api import SteamClient
@@ -28,6 +29,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "status": "ok",
                     "cache_version": GAME_RECORD_CACHE_VERSION,
                     "store_language": STEAM_STORE_LANGUAGE,
+                    "ai_configured": bool(DEEPSEEK_API_KEY),
                 }
             )
             return
@@ -128,6 +130,29 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
         )
 
         top_tags = sorted(group_tags.items(), key=lambda item: item[1], reverse=True)[:20]
+        ai_result = await refine_recommendations(
+            recommendations,
+            top_tags,
+            distribution,
+            payload.boost_tags,
+            payload.pass_tags,
+        )
+        recommendations = ai_result.recommendations
+
+        fresh_ai_used = False
+        fresh_ai_status = ""
+        if fresh_recommendations:
+            fresh_ai_result = await refine_recommendations(
+                fresh_recommendations,
+                top_tags,
+                distribution,
+                payload.boost_tags,
+                payload.pass_tags,
+            )
+            fresh_recommendations = fresh_ai_result.recommendations
+            fresh_ai_used = fresh_ai_result.used
+            fresh_ai_status = fresh_ai_result.status
+
         return RecommendResponse(
             valid_players=valid_players,
             excluded_players=excluded_players,
@@ -135,6 +160,8 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             distribution=distribution,
             recommendations=recommendations,
             fresh_recommendations=fresh_recommendations,
+            ai_used=ai_result.used or fresh_ai_used,
+            ai_status=ai_result.status if not fresh_ai_status else f"{ai_result.status} {fresh_ai_status}",
         )
     finally:
         await client.close()

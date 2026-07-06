@@ -53,7 +53,8 @@ runButton.addEventListener("click", async () => {
     renderCards(recommendationsEl, data.recommendations);
     renderCards(freshRecommendationsEl, data.fresh_recommendations || []);
     const excluded = data.excluded_players.length ? `，排除 ${data.excluded_players.length} 个数据不足或私密玩家` : "";
-    statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。`;
+    const ai = data.ai_status ? ` ${data.ai_status}` : "";
+    statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。${ai}`;
   } catch (error) {
     statusEl.textContent = error.message;
   } finally {

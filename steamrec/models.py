@@ -99,6 +99,8 @@ class RecommendResponse:
     distribution: str
     recommendations: list[Recommendation]
     fresh_recommendations: list[Recommendation] = field(default_factory=list)
+    ai_used: bool = False
+    ai_status: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

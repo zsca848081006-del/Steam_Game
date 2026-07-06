@@ -15,12 +15,14 @@
 - 新增候选游戏中文显示名表 `steamrec/localization.py`，补齐 Steam 简中接口未翻译的常见标题。
 - 修复部署脚本：每次同步后强制 `systemctl restart steam-group-rec`，避免服务继续跑旧代码。
 - `/health` 现在返回 `cache_version` 和 `store_language`，便于确认线上进程是否已加载新版。
+- 接入 DeepSeek：结构化算法先粗排，DeepSeek 只对 top 候选做精排并生成中文理由；失败时自动回退算法排序。
+- 本地优先从被 git 忽略的 `配置.md` 读取 `deepseek_api_key`；远端通过 `/etc/steam-group-rec.env` 注入 `DEEPSEEK_API_KEY`。
 
 ## 遗留事项
 
 - 当前候选池仍是结构化 MVP 种子表 + TGA 初版静态表；下一步需要实现“最近 N 个月多人新品 / 热销榜”的真实增量进料。
 - Steam store tags 暂以 `appdetails` 里的 categories/genres 兜底；还需要勘查是否能稳定取得带票数的 store tags。
-- 前端 AI 精排与理由生成尚未接入；当前理由完全由真实结构化数据拼装。
+- AI 精排与理由生成已接入 DeepSeek，但仍必须只使用候选事实；若 DeepSeek 不可用会回退结构化理由。
 - 阿里云公网访问需放行 TCP `8673` 安全组规则；项目侧和服务器侧监听已经配置完成。
 - 本机 Python 3.14 编译第三方依赖较慢，已改为无第三方运行时依赖的标准库实现。
 
