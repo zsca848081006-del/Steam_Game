@@ -13,6 +13,8 @@ APP_PORT = int(os.getenv("STEAMREC_PORT", "8673"))
 
 STEAM_API_BASE = "https://api.steampowered.com"
 STEAM_STORE_BASE = "https://store.steampowered.com"
+STEAM_STORE_LANGUAGE = os.getenv("STEAMREC_STORE_LANGUAGE", "schinese")
 
 HTTP_TIMEOUT_SECONDS = float(os.getenv("STEAMREC_HTTP_TIMEOUT", "20"))
 CACHE_TTL_SECONDS = int(os.getenv("STEAMREC_CACHE_TTL_SECONDS", str(3 * 24 * 60 * 60)))
+GAME_RECORD_CACHE_VERSION = 7

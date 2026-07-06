@@ -68,6 +68,8 @@ class GameRecord:
     store_url: str = ""
     source_marks: list[str] = field(default_factory=list)
     max_players_hint: int | None = None
+    language: str = ""
+    cache_version: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -78,6 +80,7 @@ class Recommendation:
     appid: int
     name: str
     score: float
+    fit_percent: int
     store_url: str
     tags: list[str]
     source_marks: list[str]

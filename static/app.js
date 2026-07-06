@@ -66,7 +66,7 @@ function splitTags(value) {
 }
 
 function renderTags(tags, distribution) {
-  distributionEl.textContent = distribution;
+  distributionEl.textContent = distributionLabel(distribution);
   tagsEl.innerHTML = tags.map(([tag, value]) => `<span class="tag">${escapeHtml(tag)} ${(value * 100).toFixed(1)}%</span>`).join("");
 }
 
@@ -79,18 +79,28 @@ function renderCards(target, items) {
     const image = item.capsule_image ? `<img src="${item.capsule_image}" alt="">` : "";
     const tags = item.tags.slice(0, 4).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
     const marks = item.source_marks.slice(0, 2).map((mark) => `<span class="tag">${escapeHtml(mark)}</span>`).join("");
-    const reviews = item.review_percent ? `<span class="tag">评价 ${item.review_percent}/10</span>` : "";
+    const reviews = item.review_percent ? `<span class="tag">近期口碑 ${item.review_percent}/10</span>` : "";
+    const fit = item.fit_percent ? `<span class="score">推荐度 ${item.fit_percent}%</span>` : "";
     return `
       <article class="card">
         ${image}
         <div class="card-body">
           <h3><a href="${item.store_url}" target="_blank" rel="noreferrer">${escapeHtml(item.name)}</a></h3>
-          <div class="meta"><span class="score">${item.score.toFixed(3)}</span>${reviews}${marks}${tags}</div>
+          <div class="meta">${fit}${reviews}${marks}${tags}</div>
           <p class="reason">${escapeHtml(item.reason)}</p>
         </div>
       </article>
     `;
   }).join("");
+}
+
+function distributionLabel(value) {
+  return {
+    focused: "口味集中",
+    mixed: "口味混合",
+    diverse: "口味分散",
+    insufficient: "数据不足"
+  }[value] || value || "等待计算";
 }
 
 function escapeHtml(value) {

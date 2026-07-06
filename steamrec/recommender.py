@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections import Counter, defaultdict
 
+from .awards import TGA_MULTIPLAYER_MARKS
 from .candidates import FRESH_CANDIDATES, MAIN_CANDIDATES
 from .models import GameRecord, PlayerProfile, Recommendation
 from .steam_api import is_multiplayer
@@ -96,6 +97,7 @@ def score_candidates(
                 appid=record.appid,
                 name=record.name,
                 score=round(score, 5),
+                fit_percent=0,
                 store_url=record.store_url,
                 capsule_image=record.capsule_image,
                 tags=record.tags[:8],
@@ -108,11 +110,14 @@ def score_candidates(
         )
 
     recommendations.sort(key=lambda item: item.score, reverse=True)
+    _apply_fit_percent(recommendations)
     return recommendations[:20]
 
 
 def candidate_source_map(include_fresh: bool = False) -> dict[int, list[str]]:
     source_map = dict(MAIN_CANDIDATES)
+    for appid, marks in TGA_MULTIPLAYER_MARKS.items():
+        source_map[appid] = sorted(set(source_map.get(appid, []) + marks))
     if include_fresh:
         source_map.update(FRESH_CANDIDATES)
     return source_map
@@ -135,16 +140,31 @@ def _quality_score(record: GameRecord) -> float:
     return (record.review_percent / 100) * confidence * 0.2
 
 
+def _apply_fit_percent(recommendations: list[Recommendation]) -> None:
+    if not recommendations:
+        return
+    scores = [item.score for item in recommendations]
+    best = max(scores)
+    worst = min(scores)
+    spread = best - worst
+    for item in recommendations:
+        if spread <= 0.00001:
+            item.fit_percent = 86
+        else:
+            relative = (item.score - worst) / spread
+            item.fit_percent = max(55, min(98, round(55 + relative * 43)))
+
+
 def _reason(record: GameRecord, matched_tags: list[str], owned_by: list[str], player_count: int) -> str:
     parts: list[str] = []
     if matched_tags:
-        parts.append("命中这桌共同偏好的 " + " / ".join(matched_tags[:3]))
+        parts.append("适合点：和这桌的共同偏好重合在 " + "、".join(matched_tags[:3]))
     if record.review_percent and record.review_count:
-        parts.append(f"近期 Steam 评价信号 {record.review_percent}/10，样本 {record.review_count} 条")
+        parts.append(f"近期口碑：Steam 近期评价 {record.review_percent}/10，样本 {record.review_count} 条")
     if record.source_marks:
-        parts.append("候选来源：" + "、".join(record.source_marks[:2]))
+        parts.append("入选原因：" + "、".join(record.source_marks[:2]))
     if owned_by:
-        parts.append(f"已有 {len(owned_by)}/{player_count} 人拥有，适合补票开黑")
+        parts.append(f"拥有情况：已有 {len(owned_by)}/{player_count} 人拥有，剩下的人补票即可开黑")
     else:
-        parts.append("这桌库存并集中尚未出现")
+        parts.append("拥有情况：这桌人的库存并集中还没人拥有")
     return "；".join(parts) + "。"
