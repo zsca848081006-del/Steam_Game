@@ -168,6 +168,28 @@ button:disabled {
   gap: 8px;
 }
 
+.tag-hints {
+  min-height: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hint-button {
+  border: 1px solid #c6d8dd;
+  background: #f1f8fa;
+  color: #195967;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.hint-button:hover {
+  border-color: var(--accent);
+  background: #e5f3f6;
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

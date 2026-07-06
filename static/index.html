@@ -43,13 +43,16 @@
       <div class="row">
         <label>
           <span>加权标签</span>
-          <input id="boostTags" placeholder="用逗号分隔，如 Co-op,FPS">
+          <input id="boostTags" list="tagSuggestions" placeholder="用逗号分隔，如 生存,合作射击">
+          <div id="boostTagHints" class="tag-hints"></div>
         </label>
         <label>
           <span>降权标签</span>
-          <input id="passTags" placeholder="软 pass，不做一票否决">
+          <input id="passTags" list="tagSuggestions" placeholder="软 pass，如 竞技,格斗">
+          <div id="passTagHints" class="tag-hints"></div>
         </label>
       </div>
+      <datalist id="tagSuggestions"></datalist>
 
       <button id="runButton" type="button">生成推荐</button>
       <p id="status" class="status"></p>

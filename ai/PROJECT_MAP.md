@@ -36,6 +36,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - `steamrec/candidates.py`：MVP 候选池和尝鲜档候选池。
 - `steamrec/awards.py`：TGA 多人相关获奖/提名的 Steam 可推荐子集。
 - `steamrec/localization.py`：候选游戏中文显示名兜底表。
+- `steamrec/tag_aliases.py`：中文标签联想词和用户输入别名扩展。
 - `steamrec/deepseek.py`：DeepSeek chat completions 调用、JSON 解析、appid 白名单校验和失败回退。
 - `steamrec/recommender.py`：群体口味建模、口味证据生成、候选打分、拥有过滤和理由拼装。
 - `static/`：单页前端。
@@ -88,6 +89,8 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 
 - DeepSeek 只精排已有候选并写理由，不允许新增候选 appid；接口失败时自动回退确定性排序和结构化理由。
 - DeepSeek 输入包含 `taste_evidence`：高权重口味标签背后的已玩游戏、累计时长、覆盖人数，以及候选自己的标签、来源、口碑和拥有情况。
+- 加权/降权标签会经过别名扩展，并同时匹配 Steam genres、候选来源标记和多人 category。
+- 尝鲜档当前来自 `FRESH_CANDIDATES` 静态表，候选标记为 `尝鲜档` / `Steam 即将推出`。
 - 候选枚举还不是自动抓 Steam 新品/热销榜。
 - Steam store tags 暂用 genres 代替，标签粒度不足；categories 仅用于多人硬过滤。
 - TGA 数据是初版人工静态表，覆盖 Steam 可推荐的近年多人相关获奖/提名子集，还不是完整奖项数据库。

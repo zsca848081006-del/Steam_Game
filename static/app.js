@@ -10,8 +10,21 @@ const tagsEl = document.querySelector("#tags");
 const distributionEl = document.querySelector("#distribution");
 const recommendationsEl = document.querySelector("#recommendations");
 const freshRecommendationsEl = document.querySelector("#freshRecommendations");
+const tagSuggestionsEl = document.querySelector("#tagSuggestions");
+const boostTagHintsEl = document.querySelector("#boostTagHints");
+const passTagHintsEl = document.querySelector("#passTagHints");
+
+const tagSuggestions = [
+  "生存", "生存合作", "生存建造", "开放世界生存", "合作", "双人合作", "派对合作",
+  "社交合作", "合作射击", "动作", "动作冒险", "动作 Roguelike", "冒险", "独立",
+  "角色扮演", "在线角色扮演", "大型多人在线", "策略", "多人策略", "竞技",
+  "竞技射击", "战术合作", "格斗", "派对", "休闲", "模拟", "体育", "抢先体验"
+];
 
 steamKeyInput.value = sessionStorage.getItem("steam_api_key") || "";
+tagSuggestionsEl.innerHTML = tagSuggestions.map((tag) => `<option value="${escapeHtml(tag)}"></option>`).join("");
+setupTagHints(boostTagsInput, boostTagHintsEl);
+setupTagHints(passTagsInput, passTagHintsEl);
 
 runButton.addEventListener("click", async () => {
   const steam_api_key = steamKeyInput.value.trim();
@@ -64,6 +77,34 @@ runButton.addEventListener("click", async () => {
 
 function splitTags(value) {
   return value.split(/,|，/).map((item) => item.trim()).filter(Boolean);
+}
+
+function setupTagHints(input, target) {
+  const render = () => {
+    const current = input.value.split(/,|，/).pop().trim().toLowerCase();
+    const selected = new Set(splitTags(input.value));
+    const matches = tagSuggestions
+      .filter((tag) => !selected.has(tag))
+      .filter((tag) => !current || tag.toLowerCase().includes(current) || current.includes(tag.toLowerCase()))
+      .slice(0, 8);
+    target.innerHTML = matches.map((tag) => `<button class="hint-button" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join("");
+  };
+  input.addEventListener("input", render);
+  input.addEventListener("focus", render);
+  target.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-tag]");
+    if (!button) {
+      return;
+    }
+    const parts = input.value.split(/,|，/).map((item) => item.trim()).filter(Boolean);
+    if (!parts.includes(button.dataset.tag)) {
+      parts.push(button.dataset.tag);
+    }
+    input.value = parts.join(",");
+    render();
+    input.focus();
+  });
+  render();
 }
 
 function renderTags(tags, distribution) {

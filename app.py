@@ -164,7 +164,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             recommendations=recommendations,
             fresh_recommendations=fresh_recommendations,
             ai_used=ai_result.used or fresh_ai_used,
-            ai_status=ai_result.status if not fresh_ai_status else f"{ai_result.status} {fresh_ai_status}",
+            ai_status=_merge_status(ai_result.status, fresh_ai_status),
         )
     finally:
         await client.close()
@@ -172,6 +172,17 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
 
 class RecommendationError(RuntimeError):
     pass
+
+
+def _merge_status(*values: str) -> str:
+    seen: set[str] = set()
+    parts: list[str] = []
+    for value in values:
+        cleaned = value.strip()
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            parts.append(cleaned)
+    return " ".join(parts)
 
 
 def _content_type(relative: str) -> str:

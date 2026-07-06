@@ -7,6 +7,7 @@ from .awards import TGA_MULTIPLAYER_MARKS
 from .candidates import FRESH_CANDIDATES, MAIN_CANDIDATES
 from .models import GameRecord, PlayerProfile, Recommendation
 from .steam_api import is_multiplayer
+from .tag_aliases import expand_user_terms, term_matches
 
 
 def build_group_taste(players: list[PlayerProfile], owned_records: dict[int, GameRecord]) -> tuple[dict[str, float], str]:
@@ -114,8 +115,8 @@ def score_candidates(
         for game in player.games:
             owned_by_app[game.appid].append(player.steamid)
 
-    boost = {tag.lower() for tag in boost_tags}
-    passed = {tag.lower() for tag in pass_tags}
+    boost = expand_user_terms(boost_tags)
+    passed = expand_user_terms(pass_tags)
     recommendations: list[Recommendation] = []
 
     for record in records:
@@ -128,18 +129,26 @@ def score_candidates(
         if len(owned_by) == len(players):
             continue
 
+        searchable_terms = record.tags + record.source_marks + record.categories
+        boost_match = bool(boost and any(term_matches(value, boost) for value in searchable_terms))
+        pass_match = bool(passed and any(term_matches(value, passed) for value in searchable_terms))
+
         tag_score = 0.0
         matched_tags: list[str] = []
         for tag in record.tags:
             base = group_tags.get(tag, 0.0)
-            lowered = tag.lower()
-            if lowered in boost:
+            if boost and term_matches(tag, boost):
                 base *= 2.5
-            if lowered in passed:
+            if passed and term_matches(tag, passed):
                 base *= 0.15
             if base:
                 matched_tags.append(tag)
             tag_score += base
+        if boost_match:
+            tag_score += 0.14
+            matched_tags.extend(mark for mark in record.source_marks if term_matches(mark, boost))
+        if pass_match and not boost_match:
+            tag_score *= 0.35
 
         multi_match_bonus = 1.0 + min(len(matched_tags), 4) * 0.12
         quality = _quality_score(record)
