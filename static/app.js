@@ -1,0 +1,104 @@
+const steamKeyInput = document.querySelector("#steamKey");
+const steamIdsInput = document.querySelector("#steamIds");
+const requiredPlayersInput = document.querySelector("#requiredPlayers");
+const includeFreshInput = document.querySelector("#includeFresh");
+const boostTagsInput = document.querySelector("#boostTags");
+const passTagsInput = document.querySelector("#passTags");
+const statusEl = document.querySelector("#status");
+const runButton = document.querySelector("#runButton");
+const tagsEl = document.querySelector("#tags");
+const distributionEl = document.querySelector("#distribution");
+const recommendationsEl = document.querySelector("#recommendations");
+const freshRecommendationsEl = document.querySelector("#freshRecommendations");
+
+steamKeyInput.value = sessionStorage.getItem("steam_api_key") || "";
+
+runButton.addEventListener("click", async () => {
+  const steam_api_key = steamKeyInput.value.trim();
+  const steam_ids = steamIdsInput.value.split(/\s|,|，/).map((item) => item.trim()).filter(Boolean);
+  const required_players = requiredPlayersInput.value ? Number(requiredPlayersInput.value) : null;
+  const include_fresh = includeFreshInput.checked;
+  const boost_tags = splitTags(boostTagsInput.value);
+  const pass_tags = splitTags(passTagsInput.value);
+
+  if (!steam_api_key || steam_ids.length < 2) {
+    statusEl.textContent = "需要 Steam Web API Key，并且至少输入 2 个 SteamID64。";
+    return;
+  }
+
+  sessionStorage.setItem("steam_api_key", steam_api_key);
+  runButton.disabled = true;
+  statusEl.textContent = "正在读取库存、刷新游戏属性并计算推荐...";
+  recommendationsEl.innerHTML = "";
+  freshRecommendationsEl.innerHTML = "";
+
+  try {
+    const response = await fetch("/api/recommend", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        steam_api_key,
+        steam_ids,
+        include_fresh,
+        required_players,
+        boost_tags,
+        pass_tags
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || "推荐失败");
+    }
+    renderTags(data.group_tags, data.distribution);
+    renderCards(recommendationsEl, data.recommendations);
+    renderCards(freshRecommendationsEl, data.fresh_recommendations || []);
+    const excluded = data.excluded_players.length ? `，排除 ${data.excluded_players.length} 个数据不足或私密玩家` : "";
+    statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。`;
+  } catch (error) {
+    statusEl.textContent = error.message;
+  } finally {
+    runButton.disabled = false;
+  }
+});
+
+function splitTags(value) {
+  return value.split(/,|，/).map((item) => item.trim()).filter(Boolean);
+}
+
+function renderTags(tags, distribution) {
+  distributionEl.textContent = distribution;
+  tagsEl.innerHTML = tags.map(([tag, value]) => `<span class="tag">${escapeHtml(tag)} ${(value * 100).toFixed(1)}%</span>`).join("");
+}
+
+function renderCards(target, items) {
+  if (!items.length) {
+    target.innerHTML = `<p class="muted">暂无结果。</p>`;
+    return;
+  }
+  target.innerHTML = items.map((item) => {
+    const image = item.capsule_image ? `<img src="${item.capsule_image}" alt="">` : "";
+    const tags = item.tags.slice(0, 4).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
+    const marks = item.source_marks.slice(0, 2).map((mark) => `<span class="tag">${escapeHtml(mark)}</span>`).join("");
+    const reviews = item.review_percent ? `<span class="tag">评价 ${item.review_percent}/10</span>` : "";
+    return `
+      <article class="card">
+        ${image}
+        <div class="card-body">
+          <h3><a href="${item.store_url}" target="_blank" rel="noreferrer">${escapeHtml(item.name)}</a></h3>
+          <div class="meta"><span class="score">${item.score.toFixed(3)}</span>${reviews}${marks}${tags}</div>
+          <p class="reason">${escapeHtml(item.reason)}</p>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[char]));
+}

@@ -1,0 +1,9 @@
+[project]
+name = "steam-group-rec"
+version = "0.1.0"
+description = "Steam group multiplayer game recommender"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

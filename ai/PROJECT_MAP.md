@@ -1,0 +1,90 @@
+# 项目地图
+
+## 技术栈
+
+- Python 3.11+。
+- Python 标准库 `http.server` 提供 Web 页面和 JSON API。
+- Python 标准库 `urllib` 调用 Steam Web API 与 Steam Store API。
+- SQLite 只缓存共享的游戏属性包，不保存用户 key、用户库存或个人数据。
+- 原生 HTML/CSS/JavaScript 构建当前 MVP 页面。
+
+## 运行
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+STEAMREC_PORT=8673 .venv/bin/python app.py
+```
+
+打开 `http://127.0.0.1:8673`。
+
+## 部署状态
+
+- 阿里云远端目录：`/opt/steam-group-rec`。
+- systemd 服务：`steam-group-rec`，当前配置监听 `0.0.0.0:8673`。
+- 服务器内 `http://127.0.0.1:8673/health` 已验证正常。
+- 公网访问需要阿里云安全组放行 TCP `8673`。
+
+## 项目结构
+
+- `app.py`：标准库 HTTP 应用入口，提供页面、健康检查和推荐 API。
+- `steamrec/config.py`：路径、端口、Steam API 基础地址和缓存 TTL。
+- `steamrec/models.py`：请求、玩家、游戏属性、推荐结果等 Pydantic 模型。
+- `steamrec/steam_api.py`：Steam 库存、appdetails、reviews 调用；补 `include_played_free_games=1`。
+- `steamrec/cache.py`：SQLite 游戏属性缓存。
+- `steamrec/candidates.py`：MVP 候选池和尝鲜档候选池。
+- `steamrec/recommender.py`：群体口味建模、候选打分、拥有过滤和理由拼装。
+- `static/`：单页前端。
+- `scripts/run_dev.sh`：本地开发启动脚本。
+- `scripts/deploy_aliyun.sh`：同步到阿里云并安装 systemd 服务。
+- `deploy/steam-group-rec.service`：阿里云 systemd 服务模板。
+- `deploy/ALIYUN.md`：部署与运维命令。
+- `ai/HANDOFF.md`：跨窗口交接，覆盖更新。
+- `ai/PROJECT_MAP.md`：技术栈、结构、接口、约束。
+
+## API
+
+### `GET /health`
+
+返回：
+
+```json
+{"status":"ok"}
+```
+
+### `POST /api/recommend`
+
+请求：
+
+```json
+{
+  "steam_api_key": "浏览器输入，本次请求转发",
+  "steam_ids": ["76561198813065802", "..."],
+  "include_fresh": false,
+  "required_players": 4,
+  "boost_tags": ["Co-op"],
+  "pass_tags": ["Survival"]
+}
+```
+
+返回：
+
+- `valid_players`：参与建模的有效玩家。
+- `excluded_players`：库存私密或数据不足的玩家。
+- `group_tags`：归一化后的群体标签权重。
+- `distribution`：`focused` / `mixed` / `diverse` / `insufficient`。
+- `recommendations`：主线档推荐。
+- `fresh_recommendations`：尝鲜档推荐。
+
+## 当前实现边界
+
+- AI API 调用尚未接入，当前只做确定性粗排和结构化理由。
+- 候选枚举还不是自动抓 Steam 新品/热销榜。
+- Steam store tags 暂用 categories/genres 代替，标签粒度不足。
+- Steam API key 不落库；但因为 Steam 请求必须代理，key 会随单次 HTTP 请求经过服务器进程。
+
+## 固定约束
+
+- 每次修改项目后及时提交 git。
+- 每次修改项目后必须更新 `ai/HANDOFF.md`；必要时更新本项目地图。
+- 不提交 `配置.md`、`.env`、数据库和运行时缓存。

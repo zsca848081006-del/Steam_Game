@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Steam 群体多人游戏推荐</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="panel input-panel">
+      <div>
+        <h1>Steam 群体多人游戏推荐</h1>
+        <p>输入 2-16 个公开 Steam ID，基于库存和时长推荐这桌人都值得一起玩的多人游戏。</p>
+      </div>
+
+      <label>
+        <span>Steam Web API Key</span>
+        <input id="steamKey" type="password" autocomplete="off" placeholder="仅随本次请求转发，不写入服务器">
+      </label>
+
+      <label>
+        <span>Steam ID 列表</span>
+        <textarea id="steamIds" rows="5" placeholder="每行一个 SteamID64"></textarea>
+      </label>
+
+      <div class="row">
+        <label>
+          <span>开黑人数</span>
+          <input id="requiredPlayers" type="number" min="2" max="16" placeholder="可选">
+        </label>
+        <label class="check">
+          <input id="includeFresh" type="checkbox">
+          <span>包含尝鲜档</span>
+        </label>
+      </div>
+
+      <div class="row">
+        <label>
+          <span>加权标签</span>
+          <input id="boostTags" placeholder="用逗号分隔，如 Co-op,FPS">
+        </label>
+        <label>
+          <span>降权标签</span>
+          <input id="passTags" placeholder="软 pass，不做一票否决">
+        </label>
+      </div>
+
+      <button id="runButton" type="button">生成推荐</button>
+      <p id="status" class="status"></p>
+    </section>
+
+    <section class="panel">
+      <div class="section-head">
+        <h2>共同口味</h2>
+        <span id="distribution" class="pill">等待计算</span>
+      </div>
+      <div id="tags" class="tags"></div>
+    </section>
+
+    <section class="results">
+      <div class="section-head">
+        <h2>主线档</h2>
+        <span class="muted">已发售、有口碑信号优先</span>
+      </div>
+      <div id="recommendations" class="cards"></div>
+    </section>
+
+    <section class="results">
+      <div class="section-head">
+        <h2>尝鲜档</h2>
+        <span class="muted">未发售 / 新内容，置信度较低</span>
+      </div>
+      <div id="freshRecommendations" class="cards"></div>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

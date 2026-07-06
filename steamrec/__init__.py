@@ -1,0 +1,2 @@
+"""Steam group recommendation application."""
+

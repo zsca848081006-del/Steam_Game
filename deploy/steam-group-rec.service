@@ -1,0 +1,16 @@
+[Unit]
+Description=Steam Group Recommender
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/steam-group-rec
+Environment=STEAMREC_HOST=0.0.0.0
+Environment=STEAMREC_PORT=8673
+Environment=STEAMREC_DATA_DIR=/opt/steam-group-rec/data
+ExecStart=/opt/steam-group-rec/.venv/bin/python /opt/steam-group-rec/app.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
