@@ -63,8 +63,8 @@ runButton.addEventListener("click", async () => {
       throw new Error(data.detail || "推荐失败");
     }
     renderTags(data.group_tags, data.distribution);
-    renderCards(recommendationsEl, data.recommendations);
-    renderCards(freshRecommendationsEl, data.fresh_recommendations || []);
+    renderCards(recommendationsEl, data.recommendations, "main");
+    renderCards(freshRecommendationsEl, data.fresh_recommendations || [], "fresh");
     const excluded = data.excluded_players.length ? `，排除 ${data.excluded_players.length} 个数据不足或私密玩家` : "";
     const ai = data.ai_status ? ` ${data.ai_status}` : "";
     statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。${ai}`;
@@ -112,23 +112,28 @@ function renderTags(tags, distribution) {
   tagsEl.innerHTML = tags.map(([tag, value]) => `<span class="tag">${escapeHtml(tag)} ${(value * 100).toFixed(1)}%</span>`).join("");
 }
 
-function renderCards(target, items) {
+function renderCards(target, items, variant) {
   if (!items.length) {
     target.innerHTML = `<p class="muted">暂无结果。</p>`;
     return;
   }
-  target.innerHTML = items.map((item) => {
+  target.innerHTML = items.map((item, index) => {
     const image = item.capsule_image ? `<img src="${item.capsule_image}" alt="">` : "";
     const tags = item.tags.slice(0, 4).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
     const marks = item.source_marks.slice(0, 2).map((mark) => `<span class="tag">${escapeHtml(mark)}</span>`).join("");
     const reviews = item.review_percent ? `<span class="tag">近期口碑 ${item.review_percent}/10</span>` : "";
-    const fit = item.fit_percent ? `<span class="score">推荐度 ${item.fit_percent}%</span>` : "";
+    const fitPercent = Number(item.fit_percent || 0);
+    const fit = fitPercent ? `<span class="fit-meter" style="--fit:${fitPercent}"><strong>${fitPercent}</strong><small>%</small></span>` : "";
     return `
-      <article class="card">
-        ${image}
+      <article class="card game-card ${variant === "fresh" ? "fresh-card" : ""}">
+        <div class="card-media">
+          ${image}
+          <span class="rank">#${String(index + 1).padStart(2, "0")}</span>
+          ${fit}
+        </div>
         <div class="card-body">
           <h3><a href="${item.store_url}" target="_blank" rel="noreferrer">${escapeHtml(item.name)}</a></h3>
-          <div class="meta">${fit}${reviews}${marks}${tags}</div>
+          <div class="meta">${reviews}${marks}${tags}</div>
           <p class="reason">${escapeHtml(item.reason)}</p>
         </div>
       </article>

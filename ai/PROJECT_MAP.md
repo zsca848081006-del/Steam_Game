@@ -39,6 +39,8 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - `steamrec/tag_aliases.py`：中文标签联想词和用户输入别名扩展。
 - `steamrec/deepseek.py`：DeepSeek chat completions 调用、JSON 解析、appid 白名单校验和失败回退。
 - `steamrec/recommender.py`：群体口味建模、口味证据生成、候选打分、拥有过滤和理由拼装。
+- `PRODUCT.md`：Impeccable 产品战略上下文，register 为 `product`。
+- `DESIGN.md`：Impeccable/Stitch 设计系统文档，当前主题为深色霓虹游戏推荐指挥台。
 - `static/`：单页前端。
 - `scripts/run_dev.sh`：本地开发启动脚本。
 - `scripts/deploy_aliyun.sh`：同步到阿里云并安装 systemd 服务。
@@ -96,6 +98,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - TGA 数据是初版人工静态表，覆盖 Steam 可推荐的近年多人相关获奖/提名子集，还不是完整奖项数据库。
 - Steam API key 不落库；但因为 Steam 请求必须代理，key 会随单次 HTTP 请求经过服务器进程。
 - DeepSeek key 不进 git；本地从 `配置.md` 读取，远端从 `/etc/steam-group-rec.env` 读取。
+- Stitch 项目：`projects/9926863289475385038`；design system asset：`354742b8febc46e0b2345644e8b6daa0`。
 
 ## 固定约束
 

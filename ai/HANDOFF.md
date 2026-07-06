@@ -22,6 +22,10 @@
 - 加权/降权标签支持中文别名扩展：例如输入 `生存` 会匹配 `生存合作`、`生存多人`、`多人开放世界生存` 等候选来源/标签。
 - UI 加了标签联想按钮，输入或聚焦加权/降权标签框时会显示常用中文标签建议，可点击追加。
 - 恢复尝鲜档候选源：从 Steam coming soon 官方搜索中筛过多人/合作 appid 后写入 `FRESH_CANDIDATES`，勾选尝鲜档会生成独立推荐列表。
+- 使用 Impeccable 初始化了产品/设计上下文：新增 `PRODUCT.md` 和 `DESIGN.md`，设计方向为深色霓虹游戏推荐指挥台。
+- 使用 Stitch MCP 创建项目 `projects/9926863289475385038`（Steam Group Recommender Neon UI），上传 `DESIGN.md` 并创建 design system asset `354742b8febc46e0b2345644e8b6daa0`。
+- 重构静态前端为深色霓虹 UI：输入区/共同口味区并排，游戏卡片突出 Steam header 图、排名、推荐度环、来源标签和 AI 理由。
+- Steam 游戏属性缓存版本升到 `8`，优先使用 `header_image` 作为游戏卡片图。
 
 ## 遗留事项
 
@@ -30,6 +34,7 @@
 - AI 精排与理由生成已接入 DeepSeek，但仍必须只使用候选事实；若 DeepSeek 不可用会回退结构化理由。
 - DeepSeek 理由目前依赖 `build_taste_evidence` 生成的库存证据；后续如果接入玩家昵称，可把 SteamID 替换成更友好的成员名。
 - 尝鲜档目前仍是静态候选表，下一步应做成定时/按需抓 Steam coming soon 并缓存。
+- `data/neon-ui-desktop-v2.png` 和 `data/neon-ui-mobile-v2.png` 是本轮本地验证截图，位于 ignored 的运行目录，不提交。
 - 阿里云公网访问需放行 TCP `8673` 安全组规则；项目侧和服务器侧监听已经配置完成。
 - 本机 Python 3.14 编译第三方依赖较慢，已改为无第三方运行时依赖的标准库实现。
 

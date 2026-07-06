@@ -166,7 +166,7 @@ class SteamClient:
             coming_soon=bool((data.get("release_date") or {}).get("coming_soon", False)),
             review_percent=review_percent,
             review_count=review_count,
-            capsule_image=data.get("capsule_image"),
+            capsule_image=data.get("header_image") or data.get("capsule_image"),
             store_url=f"{STEAM_STORE_BASE}/app/{appid}",
             source_marks=source_marks or [],
             max_players_hint=_max_players_hint(category_names),
