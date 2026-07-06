@@ -120,6 +120,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             payload.boost_tags,
             payload.pass_tags,
             payload.required_players,
+            payload.exclude_owned,
         )
         fresh_recommendations = (
             score_candidates(
@@ -129,6 +130,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
                 payload.boost_tags,
                 payload.pass_tags,
                 payload.required_players,
+                payload.exclude_owned,
             )
             if payload.include_fresh
             else []

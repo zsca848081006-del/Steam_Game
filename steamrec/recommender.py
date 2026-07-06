@@ -109,6 +109,7 @@ def score_candidates(
     boost_tags: list[str],
     pass_tags: list[str],
     required_players: int | None = None,
+    exclude_owned: bool = True,
 ) -> list[Recommendation]:
     owned_by_app: dict[int, list[str]] = defaultdict(list)
     for player in players:
@@ -126,6 +127,8 @@ def score_candidates(
             continue
 
         owned_by = owned_by_app.get(record.appid, [])
+        if exclude_owned and owned_by:
+            continue
         if len(owned_by) == len(players):
             continue
 

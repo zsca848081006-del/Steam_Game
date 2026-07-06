@@ -3,6 +3,7 @@ const deepseekKeyInput = document.querySelector("#deepseekKey");
 const steamIdsInput = document.querySelector("#steamIds");
 const requiredPlayersInput = document.querySelector("#requiredPlayers");
 const includeFreshInput = document.querySelector("#includeFresh");
+const excludeOwnedInput = document.querySelector("#excludeOwned");
 const boostTagsInput = document.querySelector("#boostTags");
 const passTagsInput = document.querySelector("#passTags");
 const statusEl = document.querySelector("#status");
@@ -34,6 +35,7 @@ runButton.addEventListener("click", async () => {
   const steam_ids = steamIdsInput.value.split(/\s|,|，/).map((item) => item.trim()).filter(Boolean);
   const required_players = requiredPlayersInput.value ? Number(requiredPlayersInput.value) : null;
   const include_fresh = includeFreshInput.checked;
+  const exclude_owned = excludeOwnedInput.checked;
   const boost_tags = splitTags(boostTagsInput.value);
   const pass_tags = splitTags(passTagsInput.value);
 
@@ -58,6 +60,7 @@ runButton.addEventListener("click", async () => {
         deepseek_api_key,
         steam_ids,
         include_fresh,
+        exclude_owned,
         required_players,
         boost_tags,
         pass_tags

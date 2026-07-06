@@ -10,6 +10,7 @@ class RecommendRequest:
     steam_ids: list[str]
     deepseek_api_key: str = ""
     include_fresh: bool = False
+    exclude_owned: bool = True
     required_players: int | None = None
     boost_tags: list[str] = field(default_factory=list)
     pass_tags: list[str] = field(default_factory=list)
@@ -33,6 +34,7 @@ class RecommendRequest:
             steam_ids=steam_ids,
             deepseek_api_key=str(payload.get("deepseek_api_key", "")).strip(),
             include_fresh=bool(payload.get("include_fresh", False)),
+            exclude_owned=bool(payload.get("exclude_owned", True)),
             required_players=required_players,
             boost_tags=[str(item).strip() for item in payload.get("boost_tags", []) if str(item).strip()],
             pass_tags=[str(item).strip() for item in payload.get("pass_tags", []) if str(item).strip()],

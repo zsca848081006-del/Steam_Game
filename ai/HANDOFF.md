@@ -1,6 +1,13 @@
 # 交接
 
-## 最近做了什么(本轮:域名 + HTTPS)
+## 最近做了什么(本轮:「只推全员都没有的」勾选项)
+
+- 前端新增勾选项「只推全员都没有的」(`#excludeOwned`,默认勾选),请求字段 `exclude_owned`(后端默认 true)。
+- 勾选时:候选只要有任何一名玩家拥有就被排除(主线档和尝鲜档都生效);不勾选时:恢复原行为,只排除全员都拥有的,部分人拥有的仍可推荐(补票开黑场景)。
+- 拥有判定基于玩家完整库存(`owned_by_app` 用全部 games 构建),不受口味建模只取 top 30 的限制。
+- 验证:合成数据单测两种开关行为正确;注意用同一 SteamID 传两次冒烟测试看不出该开关差别(重复库存会命中"全员拥有"规则),需要不同 ID 才能观察。
+
+## 上一轮:域名 + HTTPS
 
 - 站点绑定备案域名 `kaluli.xin` / `www.kaluli.xin`(解析已指向 8.131.69.97),nginx 443 端口 TLS 终止后反代到 `127.0.0.1:8673`,HTTP 自动 301 到 HTTPS;配置在 `deploy/nginx-kaluli.conf`,部署脚本会安装并 reload nginx。
 - 复用服务器上已有的 Let's Encrypt 证书(certbot,authenticator/installer 均为 nginx 插件,续期依赖新站点里的 server_name)。

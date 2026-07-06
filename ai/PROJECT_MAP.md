@@ -69,6 +69,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
   "deepseek_api_key": "浏览器输入，可选；不填则跳过 AI 精排",
   "steam_ids": ["76561198813065802", "..."],
   "include_fresh": false,
+  "exclude_owned": true,
   "required_players": 4,
   "boost_tags": ["Co-op"],
   "pass_tags": ["Survival"]
