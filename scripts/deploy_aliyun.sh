@@ -15,3 +15,4 @@ rsync -az --delete \
 ssh "$SERVER" "cd '$REMOTE_DIR' && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
 # DeepSeek key 已改为用户网页填写、随请求转发，服务器不再保存任何 AI key。
 ssh "$SERVER" "rm -f /etc/steam-group-rec.env && cp '$REMOTE_DIR/deploy/steam-group-rec.service' /etc/systemd/system/steam-group-rec.service && systemctl daemon-reload && systemctl enable steam-group-rec && systemctl restart steam-group-rec"
+ssh "$SERVER" "cp '$REMOTE_DIR/deploy/nginx-kaluli.conf' /etc/nginx/sites-available/kaluli && ln -sf /etc/nginx/sites-available/kaluli /etc/nginx/sites-enabled/kaluli && nginx -t && systemctl reload nginx"

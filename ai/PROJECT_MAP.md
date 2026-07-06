@@ -21,10 +21,9 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 
 ## 部署状态
 
-- 阿里云远端目录：`/opt/steam-group-rec`。
-- systemd 服务：`steam-group-rec`，当前配置监听 `0.0.0.0:8673`。
-- 服务器内 `http://127.0.0.1:8673/health` 已验证正常。
-- 公网访问需要阿里云安全组放行 TCP `8673`。
+- 公网入口：`https://www.kaluli.xin`（备案域名，Let's Encrypt 证书，certbot nginx 插件自动续期；HTTP 自动 301 到 HTTPS）。
+- 阿里云远端目录：`/opt/steam-group-rec`；systemd 服务 `steam-group-rec` 只监听 `127.0.0.1:8673`，由 nginx 443 反代（`deploy/nginx-kaluli.conf`）。
+- 服务器上另有旧项目 "geo"（nginx 反代 :8000，server_name 为 IP），与本项目并存。
 
 ## 项目结构
 

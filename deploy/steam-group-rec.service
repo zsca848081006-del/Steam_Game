@@ -5,7 +5,8 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/steam-group-rec
-Environment=STEAMREC_HOST=0.0.0.0
+# 只监听本机，公网流量必须走 nginx 的 HTTPS 反代，避免 key 明文暴露在 8673。
+Environment=STEAMREC_HOST=127.0.0.1
 Environment=STEAMREC_PORT=8673
 Environment=STEAMREC_DATA_DIR=/opt/steam-group-rec/data
 ExecStart=/opt/steam-group-rec/.venv/bin/python /opt/steam-group-rec/app.py

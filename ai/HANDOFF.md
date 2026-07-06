@@ -1,6 +1,15 @@
 # 交接
 
-## 最近做了什么(本轮:DeepSeek key 改为网页填写)
+## 最近做了什么(本轮:域名 + HTTPS)
+
+- 站点绑定备案域名 `kaluli.xin` / `www.kaluli.xin`(解析已指向 8.131.69.97),nginx 443 端口 TLS 终止后反代到 `127.0.0.1:8673`,HTTP 自动 301 到 HTTPS;配置在 `deploy/nginx-kaluli.conf`,部署脚本会安装并 reload nginx。
+- 复用服务器上已有的 Let's Encrypt 证书(certbot,authenticator/installer 均为 nginx 插件,续期依赖新站点里的 server_name)。
+- 应用改为只监听 `127.0.0.1`(service 模板 `STEAMREC_HOST=127.0.0.1`),公网流量必须走 HTTPS 反代,`http://IP:8673` 直连已不可达,key 不再明文暴露。
+- nginx `proxy_read_timeout 300s`,兼容冷缓存首次推荐的长耗时。
+- 服务器上还有旧项目"geo"(nginx `sites-enabled/geo`,server_name 为 IP,反代 :8000),未动它;域名 Host 命中新站点,旧项目仍可用 IP 访问。
+- 公网已验证:`https://www.kaluli.xin/health` 200、证书有效、HTTP 301 跳转正常、静态资源正常。
+
+## 上一轮:DeepSeek key 改为网页填写
 
 - 用户担心公网访问者消耗自己的 DeepSeek 额度:DeepSeek API Key 改为前端可选输入(`#deepseekKey`,sessionStorage 暂存),随单次请求转发,服务端不再持有;不填则跳过 AI 精排、回退算法排序,`ai_status` 会说明。
 - `RecommendRequest` 新增 `deepseek_api_key` 字段;`refine_recommendations` 改为接收 key 参数;`config.py` 删除从 `配置.md`/环境变量读 DeepSeek key 的逻辑;`/health` 的 `ai_configured` 改为 `ai_key_mode: per_request`。
