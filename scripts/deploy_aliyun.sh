@@ -13,4 +13,4 @@ rsync -az --delete \
   "$ROOT/" "$SERVER:$REMOTE_DIR/"
 
 ssh "$SERVER" "cd '$REMOTE_DIR' && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
-ssh "$SERVER" "cp '$REMOTE_DIR/deploy/steam-group-rec.service' /etc/systemd/system/steam-group-rec.service && systemctl daemon-reload && systemctl enable --now steam-group-rec"
+ssh "$SERVER" "cp '$REMOTE_DIR/deploy/steam-group-rec.service' /etc/systemd/system/steam-group-rec.service && systemctl daemon-reload && systemctl enable steam-group-rec && systemctl restart steam-group-rec"

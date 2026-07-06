@@ -52,7 +52,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 返回：
 
 ```json
-{"status":"ok"}
+{"status":"ok","cache_version":7,"store_language":"schinese"}
 ```
 
 ### `POST /api/recommend`

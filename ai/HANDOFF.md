@@ -13,6 +13,8 @@
 - 新增 `steamrec/awards.py`，把 TGA 近年多人相关获奖/提名的 Steam 可推荐子集结构化并入候选来源。
 - 口味标签改为只使用 Steam genres；categories 只用于多人硬过滤，避免“家庭共享/辅助功能/玩家对战”等平台能力污染口味解释。
 - 新增候选游戏中文显示名表 `steamrec/localization.py`，补齐 Steam 简中接口未翻译的常见标题。
+- 修复部署脚本：每次同步后强制 `systemctl restart steam-group-rec`，避免服务继续跑旧代码。
+- `/health` 现在返回 `cache_version` 和 `store_language`，便于确认线上进程是否已加载新版。
 
 ## 遗留事项
 

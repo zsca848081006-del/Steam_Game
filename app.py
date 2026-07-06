@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from steamrec.candidates import FRESH_CANDIDATES
-from steamrec.config import APP_HOST, APP_PORT, BASE_DIR
+from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
 from steamrec.models import RecommendRequest, RecommendResponse
 from steamrec.recommender import build_group_taste, candidate_source_map, owned_appids, score_candidates
 from steamrec.steam_api import SteamClient
@@ -23,7 +23,13 @@ class AppHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            self._json({"status": "ok"})
+            self._json(
+                {
+                    "status": "ok",
+                    "cache_version": GAME_RECORD_CACHE_VERSION,
+                    "store_language": STEAM_STORE_LANGUAGE,
+                }
+            )
             return
         if self.path == "/" or self.path.startswith("/?"):
             self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
