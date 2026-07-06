@@ -68,6 +68,17 @@ label {
   font-size: 14px;
 }
 
+.field-help {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.field-help a {
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
 input,
 textarea,
 button {

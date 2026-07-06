@@ -22,13 +22,14 @@ async def refine_recommendations(
     distribution: str,
     boost_tags: list[str],
     pass_tags: list[str],
+    taste_evidence: dict[str, object],
 ) -> AiResult:
     if not recommendations:
         return AiResult(recommendations, False, "没有可供 AI 精排的候选。")
     if not DEEPSEEK_API_KEY:
         return AiResult(recommendations, False, "未配置 DeepSeek API key，使用算法排序。")
 
-    payload = _build_payload(recommendations[:25], group_tags, distribution, boost_tags, pass_tags)
+    payload = _build_payload(recommendations[:25], group_tags, distribution, boost_tags, pass_tags, taste_evidence)
     try:
         raw = await asyncio.to_thread(_chat_completion, payload)
         refined = _apply_ai_result(recommendations, raw)
@@ -43,9 +44,11 @@ def _build_payload(
     distribution: str,
     boost_tags: list[str],
     pass_tags: list[str],
+    taste_evidence: dict[str, object],
 ) -> dict[str, Any]:
     facts = {
         "group_tags": [{"tag": tag, "weight": round(value, 5)} for tag, value in group_tags[:12]],
+        "taste_evidence": taste_evidence,
         "distribution": distribution,
         "boost_tags": boost_tags,
         "pass_tags": pass_tags,
@@ -73,9 +76,12 @@ def _build_payload(
         "请对这些已经由结构化算法筛出的 Steam 多人游戏候选做精排。"
         "返回 JSON 对象，格式为 {\"items\":[{\"appid\":整数,\"fit_percent\":55到98的整数,"
         "\"reason\":\"一句中文推荐理由\"}]}。"
-        "reason 必须使用这个句式：适合点：...；依据：...。"
-        "适合点只能引用 group_tags、候选 tags、source_marks 或 owned_by_count；"
-        "依据必须引用一个真实口碑、来源或拥有情况事实。"
+        "reason 必须写成 1 到 2 句自然中文，不要机械套模板，不要只堆标签。"
+        "称呼必须用“你们这桌”或“这桌人”，不要用单数“你”。"
+        "必须说明“为什么适合这桌人”：优先引用 taste_evidence 里的已玩游戏例子、累计时长或覆盖人数，"
+        "再把候选的 tags/source_marks/review/owned_by_count 作为支撑。"
+        "不要写空泛句子，例如“适合点：动作、冒险、独立”；也不要只复述评分。"
+        "如果没有足够 evidence，可以坦诚说它主要是候选来源/口碑强，而不是强口味命中。"
         "只能使用输入 candidates 中已有 appid。事实如下：\n"
         + json.dumps(facts, ensure_ascii=False)
     )

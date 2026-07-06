@@ -44,6 +44,63 @@ def build_group_taste(players: list[PlayerProfile], owned_records: dict[int, Gam
     return dict(group), distribution
 
 
+def build_taste_evidence(
+    players: list[PlayerProfile],
+    owned_records: dict[int, GameRecord],
+    group_tags: list[tuple[str, float]],
+) -> dict[str, object]:
+    top_tag_names = [tag for tag, _ in group_tags[:12]]
+    by_tag: dict[str, dict[str, object]] = {}
+    top_games: Counter[int] = Counter()
+
+    for player in players:
+        for game in player.games:
+            if game.playtime_forever <= 0:
+                continue
+            record = owned_records.get(game.appid)
+            if not record:
+                continue
+            top_games[game.appid] += game.playtime_forever
+            for tag in record.tags:
+                if tag not in top_tag_names:
+                    continue
+                entry = by_tag.setdefault(tag, {"tag": tag, "total_minutes": 0, "player_ids": set(), "games": Counter()})
+                entry["total_minutes"] = int(entry["total_minutes"]) + game.playtime_forever
+                entry["player_ids"].add(player.steamid)
+                entry["games"][game.appid] += game.playtime_forever
+
+    tag_evidence: list[dict[str, object]] = []
+    for tag, weight in group_tags[:12]:
+        entry = by_tag.get(tag)
+        if not entry:
+            continue
+        game_counter: Counter[int] = entry["games"]
+        examples = [
+            {
+                "name": owned_records[appid].name,
+                "hours": round(minutes / 60, 1),
+            }
+            for appid, minutes in game_counter.most_common(4)
+            if appid in owned_records
+        ]
+        tag_evidence.append(
+            {
+                "tag": tag,
+                "weight": round(weight, 5),
+                "total_hours": round(int(entry["total_minutes"]) / 60, 1),
+                "player_count": len(entry["player_ids"]),
+                "examples": examples,
+            }
+        )
+
+    overall_examples = [
+        {"name": owned_records[appid].name, "hours": round(minutes / 60, 1)}
+        for appid, minutes in top_games.most_common(8)
+        if appid in owned_records
+    ]
+    return {"tag_evidence": tag_evidence, "top_played_games": overall_examples}
+
+
 def score_candidates(
     records: list[GameRecord],
     group_tags: dict[str, float],

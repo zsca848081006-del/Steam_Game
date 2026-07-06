@@ -12,7 +12,7 @@ from steamrec.candidates import FRESH_CANDIDATES
 from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, DEEPSEEK_API_KEY, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
 from steamrec.deepseek import refine_recommendations
 from steamrec.models import RecommendRequest, RecommendResponse
-from steamrec.recommender import build_group_taste, candidate_source_map, owned_appids, score_candidates
+from steamrec.recommender import build_group_taste, build_taste_evidence, candidate_source_map, owned_appids, score_candidates
 from steamrec.steam_api import SteamClient
 
 
@@ -130,12 +130,14 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
         )
 
         top_tags = sorted(group_tags.items(), key=lambda item: item[1], reverse=True)[:20]
+        taste_evidence = build_taste_evidence(valid_players, owned_records, top_tags)
         ai_result = await refine_recommendations(
             recommendations,
             top_tags,
             distribution,
             payload.boost_tags,
             payload.pass_tags,
+            taste_evidence,
         )
         recommendations = ai_result.recommendations
 
@@ -148,6 +150,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
                 distribution,
                 payload.boost_tags,
                 payload.pass_tags,
+                taste_evidence,
             )
             fresh_recommendations = fresh_ai_result.recommendations
             fresh_ai_used = fresh_ai_result.used
