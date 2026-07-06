@@ -1,6 +1,13 @@
 # 交接
 
-## 最近做了什么(本轮:候选池自动进料)
+## 最近做了什么(本轮:DeepSeek key 改为网页填写)
+
+- 用户担心公网访问者消耗自己的 DeepSeek 额度:DeepSeek API Key 改为前端可选输入(`#deepseekKey`,sessionStorage 暂存),随单次请求转发,服务端不再持有;不填则跳过 AI 精排、回退算法排序,`ai_status` 会说明。
+- `RecommendRequest` 新增 `deepseek_api_key` 字段;`refine_recommendations` 改为接收 key 参数;`config.py` 删除从 `配置.md`/环境变量读 DeepSeek key 的逻辑;`/health` 的 `ai_configured` 改为 `ai_key_mode: per_request`。
+- 部署链路清理:`deploy_aliyun.sh` 不再注入 `/etc/steam-group-rec.env` 且部署时删除该文件,service 模板去掉 `EnvironmentFile` 行。
+- 本地验证:不带 key 请求 `ai_used: false` 正常回退;带 key 请求 AI 精排正常。注意 Steam key 本来就是网页填写的,本轮只动了 DeepSeek key。
+
+## 上一轮:候选池自动进料
 
 - 背景:用户反馈推荐"全是大路货",第一轮迭代方向定为候选池自动进料(原来只有 57 个静态种子)。
 - 新增 `steamrec/ingest.py`:从 Steam 搜索 `search/results/?infinite=1` 抓多人/合作游戏,解析 HTML 里的 appid、发售日期和评测 tooltip。注意:多个 `category3` 是"与"关系,必须按 category3=9(合作)和 1(多人)分别查询再合并;`filter=popularnew` 实际返回的是老热门榜,不能当"新品"用,新品要靠热销榜 + 发售日期过滤自己算。

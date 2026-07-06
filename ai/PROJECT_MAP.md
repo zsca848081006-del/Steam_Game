@@ -57,7 +57,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 返回：
 
 ```json
-{"status":"ok","cache_version":7,"store_language":"schinese","ai_configured":true}
+{"status":"ok","cache_version":8,"store_language":"schinese","ai_key_mode":"per_request"}
 ```
 
 ### `POST /api/recommend`
@@ -67,6 +67,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 ```json
 {
   "steam_api_key": "浏览器输入，本次请求转发",
+  "deepseek_api_key": "浏览器输入，可选；不填则跳过 AI 精排",
   "steam_ids": ["76561198813065802", "..."],
   "include_fresh": false,
   "required_players": 4,
@@ -97,8 +98,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - 尝鲜档动态抓 Steam comingsoon，失败时回退 `FRESH_CANDIDATES` 静态表，候选标记为 `尝鲜档` / `Steam 即将推出`。
 - Steam store tags 暂用 genres 代替，标签粒度不足；categories 仅用于多人硬过滤。
 - TGA 数据是初版人工静态表，覆盖 Steam 可推荐的近年多人相关获奖/提名子集，还不是完整奖项数据库。
-- Steam API key 不落库；但因为 Steam 请求必须代理，key 会随单次 HTTP 请求经过服务器进程。
-- DeepSeek key 不进 git；本地从 `配置.md` 读取，远端从 `/etc/steam-group-rec.env` 读取。
+- Steam API key 和 DeepSeek key 都由用户在网页填写、不落库；因为请求必须代理，两个 key 会随单次 HTTP 请求经过服务器进程。DeepSeek key 不填则跳过 AI 精排、回退算法排序。
 - Stitch 项目：`projects/9926863289475385038`；design system asset：`354742b8febc46e0b2345644e8b6daa0`。
 
 ## 固定约束

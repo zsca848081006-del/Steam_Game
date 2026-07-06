@@ -1,4 +1,5 @@
 const steamKeyInput = document.querySelector("#steamKey");
+const deepseekKeyInput = document.querySelector("#deepseekKey");
 const steamIdsInput = document.querySelector("#steamIds");
 const requiredPlayersInput = document.querySelector("#requiredPlayers");
 const includeFreshInput = document.querySelector("#includeFresh");
@@ -22,12 +23,14 @@ const tagSuggestions = [
 ];
 
 steamKeyInput.value = sessionStorage.getItem("steam_api_key") || "";
+deepseekKeyInput.value = sessionStorage.getItem("deepseek_api_key") || "";
 tagSuggestionsEl.innerHTML = tagSuggestions.map((tag) => `<option value="${escapeHtml(tag)}"></option>`).join("");
 setupTagHints(boostTagsInput, boostTagHintsEl);
 setupTagHints(passTagsInput, passTagHintsEl);
 
 runButton.addEventListener("click", async () => {
   const steam_api_key = steamKeyInput.value.trim();
+  const deepseek_api_key = deepseekKeyInput.value.trim();
   const steam_ids = steamIdsInput.value.split(/\s|,|，/).map((item) => item.trim()).filter(Boolean);
   const required_players = requiredPlayersInput.value ? Number(requiredPlayersInput.value) : null;
   const include_fresh = includeFreshInput.checked;
@@ -40,6 +43,7 @@ runButton.addEventListener("click", async () => {
   }
 
   sessionStorage.setItem("steam_api_key", steam_api_key);
+  sessionStorage.setItem("deepseek_api_key", deepseek_api_key);
   runButton.disabled = true;
   statusEl.textContent = "正在读取库存、刷新游戏属性并计算推荐...";
   recommendationsEl.innerHTML = "";
@@ -51,6 +55,7 @@ runButton.addEventListener("click", async () => {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         steam_api_key,
+        deepseek_api_key,
         steam_ids,
         include_fresh,
         required_players,

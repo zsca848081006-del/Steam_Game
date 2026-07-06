@@ -5,7 +5,7 @@ import json
 from typing import Any
 from urllib.request import Request, urlopen
 
-from .config import DEEPSEEK_API_BASE, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_TIMEOUT_SECONDS
+from .config import DEEPSEEK_API_BASE, DEEPSEEK_MODEL, DEEPSEEK_TIMEOUT_SECONDS
 from .models import Recommendation
 
 
@@ -23,15 +23,16 @@ async def refine_recommendations(
     boost_tags: list[str],
     pass_tags: list[str],
     taste_evidence: dict[str, object],
+    api_key: str,
 ) -> AiResult:
     if not recommendations:
         return AiResult(recommendations, False, "没有可供 AI 精排的候选。")
-    if not DEEPSEEK_API_KEY:
-        return AiResult(recommendations, False, "未配置 DeepSeek API key，使用算法排序。")
+    if not api_key:
+        return AiResult(recommendations, False, "未填写 DeepSeek API Key，使用算法排序。")
 
     payload = _build_payload(recommendations[:25], group_tags, distribution, boost_tags, pass_tags, taste_evidence)
     try:
-        raw = await asyncio.to_thread(_chat_completion, payload)
+        raw = await asyncio.to_thread(_chat_completion, payload, api_key)
         refined = _apply_ai_result(recommendations, raw)
         return AiResult(refined, True, "DeepSeek 已参与精排和理由生成。")
     except Exception as exc:
@@ -97,13 +98,13 @@ def _build_payload(
     }
 
 
-def _chat_completion(payload: dict[str, Any]) -> dict[str, Any]:
+def _chat_completion(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = Request(
         f"{DEEPSEEK_API_BASE.rstrip('/')}/chat/completions",
         data=body,
         headers={
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         },

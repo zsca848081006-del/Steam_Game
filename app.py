@@ -8,7 +8,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, DEEPSEEK_API_KEY, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
+from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
 from steamrec.deepseek import refine_recommendations
 from steamrec.ingest import load_candidate_pools
 from steamrec.models import RecommendRequest, RecommendResponse
@@ -29,7 +29,7 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "status": "ok",
                     "cache_version": GAME_RECORD_CACHE_VERSION,
                     "store_language": STEAM_STORE_LANGUAGE,
-                    "ai_configured": bool(DEEPSEEK_API_KEY),
+                    "ai_key_mode": "per_request",
                 }
             )
             return
@@ -143,6 +143,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             payload.boost_tags,
             payload.pass_tags,
             taste_evidence,
+            payload.deepseek_api_key,
         )
         recommendations = ai_result.recommendations
 
@@ -156,6 +157,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
                 payload.boost_tags,
                 payload.pass_tags,
                 taste_evidence,
+                payload.deepseek_api_key,
             )
             fresh_recommendations = fresh_ai_result.recommendations
             fresh_ai_used = fresh_ai_result.used

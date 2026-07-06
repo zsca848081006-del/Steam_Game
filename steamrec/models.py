@@ -8,6 +8,7 @@ from typing import Any
 class RecommendRequest:
     steam_api_key: str
     steam_ids: list[str]
+    deepseek_api_key: str = ""
     include_fresh: bool = False
     required_players: int | None = None
     boost_tags: list[str] = field(default_factory=list)
@@ -30,6 +31,7 @@ class RecommendRequest:
         return cls(
             steam_api_key=str(payload["steam_api_key"]),
             steam_ids=steam_ids,
+            deepseek_api_key=str(payload.get("deepseek_api_key", "")).strip(),
             include_fresh=bool(payload.get("include_fresh", False)),
             required_players=required_players,
             boost_tags=[str(item).strip() for item in payload.get("boost_tags", []) if str(item).strip()],
