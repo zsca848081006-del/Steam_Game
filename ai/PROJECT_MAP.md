@@ -33,7 +33,8 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - `steamrec/models.py`：请求、玩家、游戏属性、推荐结果等 dataclass 模型。
 - `steamrec/steam_api.py`：Steam 库存、appdetails、reviews 调用；补 `include_played_free_games=1`。
 - `steamrec/cache.py`：SQLite 游戏属性缓存。
-- `steamrec/candidates.py`：MVP 候选池和尝鲜档候选池。
+- `steamrec/candidates.py`：MVP 静态种子候选池和尝鲜档回退候选池。
+- `steamrec/ingest.py`：从 Steam 搜索自动进料候选池（近一年热门新品/高口碑多人/热销多人/即将推出），结果缓存 12 小时。
 - `steamrec/awards.py`：TGA 多人相关获奖/提名的 Steam 可推荐子集。
 - `steamrec/localization.py`：候选游戏中文显示名兜底表。
 - `steamrec/tag_aliases.py`：中文标签联想词和用户输入别名扩展。
@@ -92,8 +93,8 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - DeepSeek 只精排已有候选并写理由，不允许新增候选 appid；接口失败时自动回退确定性排序和结构化理由。
 - DeepSeek 输入包含 `taste_evidence`：高权重口味标签背后的已玩游戏、累计时长、覆盖人数，以及候选自己的标签、来源、口碑和拥有情况。
 - 加权/降权标签会经过别名扩展，并同时匹配 Steam genres、候选来源标记和多人 category。
-- 尝鲜档当前来自 `FRESH_CANDIDATES` 静态表，候选标记为 `尝鲜档` / `Steam 即将推出`。
-- 候选枚举还不是自动抓 Steam 新品/热销榜。
+- 候选池由 `steamrec/ingest.py` 自动进料（Steam 搜索热销/评分/即将推出榜），叠加静态种子和 TGA 表；打分含大路货降权（评测数 ≥20 万 ×0.7、≥8 万 ×0.85）和新品加成。
+- 尝鲜档动态抓 Steam comingsoon，失败时回退 `FRESH_CANDIDATES` 静态表，候选标记为 `尝鲜档` / `Steam 即将推出`。
 - Steam store tags 暂用 genres 代替，标签粒度不足；categories 仅用于多人硬过滤。
 - TGA 数据是初版人工静态表，覆盖 Steam 可推荐的近年多人相关获奖/提名子集，还不是完整奖项数据库。
 - Steam API key 不落库；但因为 Steam 请求必须代理，key 会随单次 HTTP 请求经过服务器进程。

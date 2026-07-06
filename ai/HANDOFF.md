@@ -26,14 +26,20 @@
 - 使用 Stitch MCP 创建项目 `projects/9926863289475385038`（Steam Group Recommender Neon UI），上传 `DESIGN.md` 并创建 design system asset `354742b8febc46e0b2345644e8b6daa0`。
 - 重构静态前端为深色霓虹 UI：输入区/共同口味区并排，游戏卡片突出 Steam header 图、排名、推荐度环、来源标签和 AI 理由。
 - Steam 游戏属性缓存版本升到 `8`，优先使用 `header_image` 作为游戏卡片图。
+- 新增 `steamrec/ingest.py`：候选池自动进料。从 Steam 搜索 `search/results/?infinite=1` 抓多人/合作游戏（按 category3=9 和 1 分别查询再合并，多个 category3 是"与"关系），解析 HTML 里的 appid、发售日期和评测 tooltip。
+- 进料三路主候选：近 18 个月发售且好评率 ≥70% 的热销新品（`Steam 近一年热门新品`）、评分排序且评测数 ≥400/好评 ≥85% 的中体量游戏（`Steam 高口碑多人`）、少量常青热销（`Steam 热销多人`）；尝鲜档改为动态抓 comingsoon（过滤 Demo/Playtest），静态 `FRESH_CANDIDATES` 只作回退。
+- 动态池缓存在 SQLite `steam_http_cache` 表（新增 `get_http`/`put_http`），TTL 12 小时（`STEAMREC_CANDIDATE_POOL_TTL`）；刷新失败回退陈旧缓存，再失败只用静态种子，不影响可用性。
+- 打分加"大路货降权"：评测数 ≥20 万 ×0.7、≥8 万 ×0.85，另给新品/即将推出候选 +0.05；针对用户反馈"推荐全是早就知道的大热门"。实测饥荒（53 万评测）从头部降到第 9，前排换成梦之形、失落城堡2、Rabbit and Steel 等中体量新品。
+- `candidate_source_map` 改为返回 `(source_map, fresh_ids)` 并接受动态池参数；`app.py` 请求时先 `load_candidate_pools` 再打分。
 
 ## 遗留事项
 
-- 当前候选池仍是结构化 MVP 种子表 + TGA 初版静态表；下一步需要实现“最近 N 个月多人新品 / 热销榜”的真实增量进料。
-- Steam store tags 暂以 `appdetails` 里的 categories/genres 兜底；还需要勘查是否能稳定取得带票数的 store tags。
+- 候选池已动态进料，但下一个质量瓶颈是口味信号：store tags 仍以 genres 兜底（十几维、区分度低），下一步接 `IStoreService/GetTagList`（支持简中）+ 带票数 tags，把口味向量换成细粒度标签，并改余弦相似度 + 烂大街标签 IDF 降权 + `playtime_2weeks` 近期加成。
+- `fit_percent` 是组内 min-max 拉伸（55–98），整体不匹配时第一名也显示 98%，需要改绝对标定。
+- `_max_players_hint` 把所有 co-op 一律当 4 人上限，用户要求 5 人以上时会误杀 8 人合作游戏。
+- 动态池冷缓存首次请求约 80 秒（数百个 appdetails 请求）；未见 429，但若线上触发限流，考虑进料后后台预热 appdetails 缓存。
 - AI 精排与理由生成已接入 DeepSeek，但仍必须只使用候选事实；若 DeepSeek 不可用会回退结构化理由。
 - DeepSeek 理由目前依赖 `build_taste_evidence` 生成的库存证据；后续如果接入玩家昵称，可把 SteamID 替换成更友好的成员名。
-- 尝鲜档目前仍是静态候选表，下一步应做成定时/按需抓 Steam coming soon 并缓存。
 - `data/neon-ui-desktop-v2.png` 和 `data/neon-ui-mobile-v2.png` 是本轮本地验证截图，位于 ignored 的运行目录，不提交。
 - 阿里云公网访问需放行 TCP `8673` 安全组规则；项目侧和服务器侧监听已经配置完成。
 - 本机 Python 3.14 编译第三方依赖较慢，已改为无第三方运行时依赖的标准库实现。

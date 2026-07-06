@@ -51,6 +51,31 @@ class GameCache:
             return None
         return json.loads(row["payload"])
 
+    def get_http(self, cache_key: str, max_age: int | None) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload, fetched_at FROM steam_http_cache WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+        if not row:
+            return None
+        if max_age is not None and int(time.time()) - row["fetched_at"] > max_age:
+            return None
+        return json.loads(row["payload"])
+
+    def put_http(self, cache_key: str, payload: dict[str, Any]) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO steam_http_cache(cache_key, payload, fetched_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                    payload = excluded.payload,
+                    fetched_at = excluded.fetched_at
+                """,
+                (cache_key, json.dumps(payload, ensure_ascii=False), int(time.time())),
+            )
+
     def put_game(self, appid: int, payload: dict[str, Any]) -> None:
         with self._connect() as conn:
             conn.execute(

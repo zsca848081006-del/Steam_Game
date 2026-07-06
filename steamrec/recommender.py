@@ -155,6 +155,9 @@ def score_candidates(
         ownership_bonus = 0.08 if owned_by else 0.0
         source_bonus = 0.03 * len(record.source_marks)
         score = tag_score * multi_match_bonus + quality + ownership_bonus + source_bonus
+        score *= _mainstream_factor(record)
+        if any("新品" in mark or "即将推出" in mark for mark in record.source_marks):
+            score += 0.05
         if score <= 0:
             continue
 
@@ -180,13 +183,23 @@ def score_candidates(
     return recommendations[:20]
 
 
-def candidate_source_map(include_fresh: bool = False) -> dict[int, list[str]]:
+def candidate_source_map(
+    include_fresh: bool = False,
+    dynamic_main: dict[int, list[str]] | None = None,
+    dynamic_fresh: dict[int, list[str]] | None = None,
+) -> tuple[dict[int, list[str]], set[int]]:
     source_map = dict(MAIN_CANDIDATES)
     for appid, marks in TGA_MULTIPLAYER_MARKS.items():
         source_map[appid] = sorted(set(source_map.get(appid, []) + marks))
+    for appid, marks in (dynamic_main or {}).items():
+        source_map[appid] = sorted(set(source_map.get(appid, []) + marks))
+
+    fresh_pool = dynamic_fresh or FRESH_CANDIDATES
+    fresh_ids = {appid for appid in fresh_pool if appid not in source_map}
     if include_fresh:
-        source_map.update(FRESH_CANDIDATES)
-    return source_map
+        for appid in fresh_ids:
+            source_map[appid] = list(fresh_pool[appid])
+    return source_map, fresh_ids
 
 
 def owned_appids(players: list[PlayerProfile], limit_per_player: int = 30) -> list[int]:
@@ -195,6 +208,17 @@ def owned_appids(players: list[PlayerProfile], limit_per_player: int = 30) -> li
         top_games = sorted(player.games, key=lambda game: game.playtime_forever, reverse=True)[:limit_per_player]
         appids.update(game.appid for game in top_games)
     return list(appids)
+
+
+def _mainstream_factor(record: GameRecord) -> float:
+    # 国民级大热门对开黑推荐几乎没有信息量，做温和降权，让中体量高口碑和新品有机会浮上来。
+    if not record.review_count:
+        return 1.0
+    if record.review_count >= 200_000:
+        return 0.7
+    if record.review_count >= 80_000:
+        return 0.85
+    return 1.0
 
 
 def _quality_score(record: GameRecord) -> float:

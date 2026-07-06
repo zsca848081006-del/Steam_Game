@@ -8,9 +8,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from steamrec.candidates import FRESH_CANDIDATES
 from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, DEEPSEEK_API_KEY, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
 from steamrec.deepseek import refine_recommendations
+from steamrec.ingest import load_candidate_pools
 from steamrec.models import RecommendRequest, RecommendResponse
 from steamrec.recommender import build_group_taste, build_taste_evidence, candidate_source_map, owned_appids, score_candidates
 from steamrec.steam_api import SteamClient
@@ -102,9 +102,14 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
         if not group_tags:
             raise RecommendationError("有效库存时长不足，无法生成口味向量。")
 
-        source_map = candidate_source_map(include_fresh=payload.include_fresh)
+        dynamic_main, dynamic_fresh, pool_status = await load_candidate_pools(client.cache)
+        print(f"candidate pool: {pool_status}")
+        source_map, fresh_ids = candidate_source_map(
+            include_fresh=payload.include_fresh,
+            dynamic_main=dynamic_main,
+            dynamic_fresh=dynamic_fresh,
+        )
         candidate_records = await client.app_details_many(source_map.keys(), source_map)
-        fresh_ids = set(FRESH_CANDIDATES)
         main_records = [record for record in candidate_records if record.appid not in fresh_ids]
         fresh_records = [record for record in candidate_records if record.appid in fresh_ids]
 
