@@ -43,6 +43,16 @@ if not STATS_TOKEN:
         if _match:
             STATS_TOKEN = _match.group(1)
 
+# 兜底 Steam Web API Key：用户网页留空时使用（站长自己的 key，站长知情同意部署到服务器）。
+# 本地从 配置.md 的 `steamapi：` 行读取，远端从 env 注入。
+FALLBACK_STEAM_API_KEY = os.getenv("STEAMREC_FALLBACK_STEAM_KEY", "")
+if not FALLBACK_STEAM_API_KEY:
+    _local_config = BASE_DIR / "配置.md"
+    if _local_config.exists():
+        _match = re.search(r"steamapi[：:]\s*([A-Za-z0-9]+)", _local_config.read_text(encoding="utf-8"))
+        if _match:
+            FALLBACK_STEAM_API_KEY = _match.group(1)
+
 # DeepSeek key 由用户在网页填写、随单次请求转发，服务端不持有。
 DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")

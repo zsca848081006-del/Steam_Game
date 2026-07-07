@@ -21,6 +21,7 @@ from steamrec.config import (
     APP_HOST,
     APP_PORT,
     BASE_DIR,
+    FALLBACK_STEAM_API_KEY,
     GAME_RECORD_CACHE_VERSION,
     MAX_CONCURRENT_RECOMMENDATIONS,
     RECOMMENDATION_TIMEOUT_SECONDS,
@@ -40,7 +41,7 @@ from steamrec.recommender import (
     score_candidates,
     top_group_tags,
 )
-from steamrec.steam_api import SteamClient
+from steamrec.steam_api import SteamClient, SteamKeyError
 from steamrec.tags import tag_dictionary
 
 
@@ -142,7 +143,11 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._json({"detail": str(exc)}, HTTPStatus.BAD_REQUEST)
         except RecommendationError as exc:
             status = "unprocessable"
-            self._json({"detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
+            body: dict[str, Any] = {"detail": str(exc)}
+            if exc.error_code:
+                body["error_code"] = exc.error_code
+                status = exc.error_code
+            self._json(body, HTTPStatus.UNPROCESSABLE_ENTITY)
         except Exception as exc:
             status = "error"
             self._json({"detail": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -205,12 +210,35 @@ class AppHandler(SimpleHTTPRequestHandler):
 
 async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
     client = SteamClient()
+    api_key = payload.steam_api_key or FALLBACK_STEAM_API_KEY
+    used_fallback = not payload.steam_api_key
+    if not api_key:
+        raise RecommendationError("站点未配置公共 Steam Key，请填写你自己的 Steam Web API Key。", "user_key_needed")
     try:
-        raw_players = [
-            await client.owned_games(payload.steam_api_key, steamid.strip())
-            for steamid in payload.steam_ids
-            if steamid.strip()
-        ]
+        try:
+            steam_ids: list[str] = []
+            unresolved: list[str] = []
+            for entry in payload.steam_ids:
+                resolved = await client.resolve_steam_id(api_key, entry)
+                if resolved is None:
+                    unresolved.append(entry)
+                elif resolved not in steam_ids:
+                    steam_ids.append(resolved)
+            if unresolved:
+                raise RecommendationError("这些输入无法解析成 Steam ID：" + "、".join(unresolved[:4]) + "。支持 SteamID64 或 Steam 个人主页链接。")
+            if len(steam_ids) < 2:
+                raise RecommendationError("去重后不足 2 个不同的 Steam ID，无法建模共同口味。")
+
+            raw_players = [await client.owned_games(api_key, steamid) for steamid in steam_ids]
+        except SteamKeyError as exc:
+            if used_fallback:
+                raise RecommendationError(
+                    "站长的公共 Steam Key 暂时不可用（限额或失效），请填写你自己的 Steam Web API Key 后重试。",
+                    "fallback_key_failed",
+                ) from exc
+            if exc.kind == "rate_limited":
+                raise RecommendationError("你的 Steam Web API Key 被 Steam 限流了，请稍后再试。", "user_key_failed") from exc
+            raise RecommendationError("你的 Steam Web API Key 无效或没有权限，请检查后重试。", "user_key_failed") from exc
         valid_players = [player for player in raw_players if player.valid]
         excluded_players = [player for player in raw_players if not player.valid]
         if len(valid_players) < 2:
@@ -306,7 +334,9 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
 
 
 class RecommendationError(RuntimeError):
-    pass
+    def __init__(self, message: str, error_code: str | None = None) -> None:
+        super().__init__(message)
+        self.error_code = error_code
 
 
 def _merge_status(*values: str) -> str:

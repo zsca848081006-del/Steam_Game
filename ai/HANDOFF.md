@@ -1,6 +1,13 @@
 # 交接
 
-## 最近做了什么(本轮:口味向量升级,已上线)
+## 最近做了什么(本轮:兜底 Steam Key + 主页链接解析)
+
+- 站长 Steam Key 部署为兜底:网页 key 留空时后端用 `FALLBACK_STEAM_API_KEY`(本地读 `配置.md` `steamapi：`,远端 env `STEAMREC_FALLBACK_STEAM_KEY`,部署脚本自动写入 `/etc/steam-group-rec.env`);前端 key 字段改为可选并说明。
+- key 错误分类:`SteamKeyError`(401/403=denied,429=rate_limited,注意 **Steam 对坏 key 返回 401** 不是 403)→ 兜底 key 出错提示"站长的公共 Key 暂时不可用,请填自己的"(`error_code: fallback_key_failed`,前端附申请链接并聚焦 key 输入框);用户自己的 key 出错提示无效/被限流(`user_key_failed`)。库存私密/太小仍按玩家单独排除,不与 key 错误混淆(私密资料是 200+空 response,不走 401)。
+- Steam ID 输入支持主页链接:`resolve_steam_id` 处理 SteamID64、`/profiles/xxx`(正则提取)、`/id/自定义名`(`ResolveVanityURL` 解析,裸自定义名也试);无法解析的输入会指名报错;解析后自动去重,error_code 会进访问统计的 status。
+- 本地验证:留空 key+链接混输 OK、vanity 解析 OK(G 胖主页→76561197960287930)、坏 key 用户/兜底两种提示正确、无法解析输入报错正确。
+
+## 上一轮:口味向量升级,已上线
 
 - 用户提供了自己小队的 3 个真实 SteamID 作为测试数据(存 `配置.md` "测试小队"),本地验证通过后已部署阿里云;线上冷启动约 80 秒跑通(GetItems 在阿里云网络可用),缓存已预热,结果与本地一致。
 - 口味信号从十几维 genre 换成玩家投票标签:新增 `steamrec/tags.py`,`IStoreService/GetTagList`(简中标签字典,448 个,免 key,缓存 7 天)+ `IStoreBrowseService/GetItems`(每游戏 top20 标签带票数,免 key,支持批量,每批 40 个);`GameRecord` 新增 `tag_weights`(str(tagid)→票数),缓存版本升到 9(旧缓存自动重建,冷启动约 45 秒)。

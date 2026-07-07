@@ -29,12 +29,12 @@
         </div>
 
         <label>
-          <span>Steam Web API Key</span>
-          <input id="steamKey" type="password" autocomplete="off" placeholder="仅随本次请求转发，不写入服务器">
+          <span>Steam Web API Key（可选）</span>
+          <input id="steamKey" type="password" autocomplete="off" placeholder="留空则使用站长的公共 key">
           <small class="field-help">
-            没有 key？登录 Steam 后到
+            留空会用站长的公共 key（人多时可能限额）。想用自己的？登录 Steam 后到
             <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">Steam Web API Key 申请页</a>
-            获取。
+            获取，key 仅随本次请求转发，不写入服务器。
           </small>
         </label>
 
@@ -50,7 +50,8 @@
 
         <label>
           <span>Steam ID 列表</span>
-          <textarea id="steamIds" rows="5" placeholder="每行一个 SteamID64"></textarea>
+          <textarea id="steamIds" rows="5" placeholder="每行一个，支持 SteamID64 或 Steam 个人主页链接&#10;例：https://steamcommunity.com/profiles/7656119..."></textarea>
+          <small class="field-help">直接粘贴好友的 Steam 个人主页链接即可，我们会自动解析出 Steam ID。</small>
         </label>
 
         <div class="row">

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 import json
+import re
 import time
 from typing import Any
 from urllib.parse import urlencode
@@ -90,6 +91,14 @@ class SteamApiError(RuntimeError):
     pass
 
 
+class SteamKeyError(RuntimeError):
+    """API key 本身的问题（无效/限额），区别于玩家资料私密等用户数据问题。"""
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(kind)
+        self.kind = kind  # "denied" | "rate_limited"
+
+
 # 全进程共享的 Steam 出站并发上限；依赖 app.py 的单一事件循环，多个并发请求共用同一配额。
 _fetch_semaphore: asyncio.Semaphore | None = None
 
@@ -119,8 +128,13 @@ class SteamClient:
         url = f"{STEAM_API_BASE}/IPlayerService/GetOwnedGames/v0001/"
         try:
             body = await asyncio.to_thread(_get_json, url, params)
-        except PermissionError:
-            return PlayerProfile(steamid=steamid, games=[], valid=False, reason="Steam API key denied or profile is private")
+        except PermissionError as exc:
+            # GetOwnedGames 的 403/401 是 key 无效；私密资料是 200 + 空 response，不走这里。
+            raise SteamKeyError("denied") from exc
+        except Exception as exc:
+            if getattr(exc, "code", None) == 429:
+                raise SteamKeyError("rate_limited") from exc
+            raise
         body = body.get("response", {})
         games = [
             OwnedGame(
@@ -131,9 +145,41 @@ class SteamClient:
             )
             for item in body.get("games", [])
         ]
+        if not games:
+            return PlayerProfile(steamid=steamid, games=[], valid=False, reason="库存私密或为空，无法读取")
         if len(games) < 4 or sum(g.playtime_forever for g in games) < 120:
-            return PlayerProfile(steamid=steamid, games=games, valid=False, reason="visible library is too small for group taste modeling")
+            return PlayerProfile(steamid=steamid, games=games, valid=False, reason="可见库存太小，不足以参与口味建模")
         return PlayerProfile(steamid=steamid, games=games)
+
+    async def resolve_steam_id(self, api_key: str, entry: str) -> str | None:
+        """把用户输入(SteamID64 / 主页链接 / 自定义名)解析成 SteamID64；解析失败返回 None。"""
+        entry = entry.strip().rstrip("/")
+        if re.fullmatch(r"\d{17}", entry):
+            return entry
+        profile_match = re.search(r"steamcommunity\.com/profiles/(\d{17})", entry)
+        if profile_match:
+            return profile_match.group(1)
+        vanity = None
+        vanity_match = re.search(r"steamcommunity\.com/id/([\w.-]+)", entry)
+        if vanity_match:
+            vanity = vanity_match.group(1)
+        elif re.fullmatch(r"[\w.-]{2,32}", entry):
+            vanity = entry
+        if not vanity:
+            return None
+        url = f"{STEAM_API_BASE}/ISteamUser/ResolveVanityURL/v0001/"
+        try:
+            body = await asyncio.to_thread(_get_json, url, {"key": api_key, "vanityurl": vanity})
+        except PermissionError as exc:
+            raise SteamKeyError("denied") from exc
+        except Exception as exc:
+            if getattr(exc, "code", None) == 429:
+                raise SteamKeyError("rate_limited") from exc
+            return None
+        response = body.get("response", {})
+        if response.get("success") == 1:
+            return str(response.get("steamid"))
+        return None
 
     def _cached_record(self, appid: int, source_marks: list[str] | None = None) -> GameRecord | None:
         cached = self.cache.get_game(appid)
@@ -283,7 +329,7 @@ def _get_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
                 return json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             code = getattr(exc, "code", None)
-            if code == 403:
+            if code in (401, 403):
                 raise PermissionError from exc
             if code in (429, 500, 502, 503) and attempt < 2:
                 last_exc = exc

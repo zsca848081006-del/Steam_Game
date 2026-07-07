@@ -39,8 +39,8 @@ runButton.addEventListener("click", async () => {
   const boost_tags = splitTags(boostTagsInput.value);
   const pass_tags = splitTags(passTagsInput.value);
 
-  if (!steam_api_key || steam_ids.length < 2) {
-    statusEl.textContent = "需要 Steam Web API Key，并且至少输入 2 个 SteamID64。";
+  if (steam_ids.length < 2) {
+    statusEl.textContent = "至少输入 2 个 Steam ID 或个人主页链接。";
     return;
   }
 
@@ -68,7 +68,9 @@ runButton.addEventListener("click", async () => {
     });
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.detail || "推荐失败");
+      const error = new Error(data.detail || "推荐失败");
+      error.code = data.error_code;
+      throw error;
     }
     renderTags(data.group_tags, data.distribution);
     renderCards(recommendationsEl, data.recommendations, "main");
@@ -77,7 +79,12 @@ runButton.addEventListener("click", async () => {
     const ai = data.ai_status ? ` ${data.ai_status}` : "";
     statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。${ai}`;
   } catch (error) {
-    statusEl.textContent = error.message;
+    if (error.code === "fallback_key_failed" || error.code === "user_key_needed") {
+      statusEl.innerHTML = `${escapeHtml(error.message)} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">点这里申请自己的 key</a>`;
+      steamKeyInput.focus();
+    } else {
+      statusEl.textContent = error.message;
+    }
   } finally {
     runButton.disabled = false;
   }

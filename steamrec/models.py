@@ -18,8 +18,8 @@ class RecommendRequest:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "RecommendRequest":
         steam_ids = [str(item).strip() for item in payload.get("steam_ids", []) if str(item).strip()]
-        if not payload.get("steam_api_key") or not steam_ids:
-            raise ValueError("steam_api_key and steam_ids are required")
+        if not steam_ids:
+            raise ValueError("steam_ids are required")
         if len(steam_ids) > 16:
             raise ValueError("steam_ids supports at most 16 players")
         required_players = payload.get("required_players")
@@ -30,7 +30,7 @@ class RecommendRequest:
             if required_players < 2 or required_players > 16:
                 raise ValueError("required_players must be between 2 and 16")
         return cls(
-            steam_api_key=str(payload["steam_api_key"]),
+            steam_api_key=str(payload.get("steam_api_key", "")).strip(),
             steam_ids=steam_ids,
             deepseek_api_key=str(payload.get("deepseek_api_key", "")).strip(),
             include_fresh=bool(payload.get("include_fresh", False)),
