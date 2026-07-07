@@ -46,6 +46,7 @@ class OwnedGame:
     appid: int
     name: str = ""
     playtime_forever: int = 0
+    playtime_2weeks: int = 0
 
 
 @dataclass
@@ -64,6 +65,8 @@ class GameRecord:
     tags: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     genres: list[str] = field(default_factory=list)
+    # 玩家投票标签 {tagid(str): 票数}；JSON round-trip 需要字符串键，展示名按请求语言另行解析。
+    tag_weights: dict[str, int] = field(default_factory=dict)
     release_date: str | None = None
     coming_soon: bool = False
     review_percent: int | None = None

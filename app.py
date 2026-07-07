@@ -31,8 +31,17 @@ from steamrec.config import (
 from steamrec.deepseek import refine_recommendations
 from steamrec.ingest import load_candidate_pools
 from steamrec.models import RecommendRequest, RecommendResponse
-from steamrec.recommender import build_group_taste, build_taste_evidence, candidate_source_map, owned_appids, score_candidates
+from steamrec.recommender import (
+    apply_display_tags,
+    build_group_taste,
+    build_taste_evidence,
+    candidate_source_map,
+    owned_appids,
+    score_candidates,
+    top_group_tags,
+)
 from steamrec.steam_api import SteamClient
+from steamrec.tags import tag_dictionary
 
 
 STATIC_DIR = BASE_DIR / "static"
@@ -207,8 +216,10 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
         if len(valid_players) < 2:
             raise RecommendationError("有效玩家少于 2 人，无法建模共同口味。")
 
+        tag_names = await tag_dictionary(client.cache)
         taste_appids = owned_appids(valid_players)
         owned_records_list = await client.app_details_many(taste_appids, {})
+        apply_display_tags(owned_records_list, tag_names)
         owned_records = {record.appid: record for record in owned_records_list}
         group_tags, distribution = build_group_taste(valid_players, owned_records)
         if not group_tags:
@@ -222,6 +233,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             dynamic_fresh=dynamic_fresh,
         )
         candidate_records = await client.app_details_many(source_map.keys(), source_map)
+        apply_display_tags(candidate_records, tag_names)
         main_records = [record for record in candidate_records if record.appid not in fresh_ids]
         fresh_records = [record for record in candidate_records if record.appid in fresh_ids]
 
@@ -233,6 +245,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             payload.pass_tags,
             payload.required_players,
             payload.exclude_owned,
+            tag_names,
         )
         fresh_recommendations = (
             score_candidates(
@@ -243,12 +256,13 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
                 payload.pass_tags,
                 payload.required_players,
                 payload.exclude_owned,
+                tag_names,
             )
             if payload.include_fresh
             else []
         )
 
-        top_tags = sorted(group_tags.items(), key=lambda item: item[1], reverse=True)[:20]
+        top_tags = top_group_tags(group_tags, tag_names, limit=20)
         taste_evidence = build_taste_evidence(valid_players, owned_records, top_tags)
         ai_result = await refine_recommendations(
             recommendations,

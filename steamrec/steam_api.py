@@ -127,6 +127,7 @@ class SteamClient:
                 appid=int(item["appid"]),
                 name=item.get("name", ""),
                 playtime_forever=int(item.get("playtime_forever", 0)),
+                playtime_2weeks=int(item.get("playtime_2weeks", 0)),
             )
             for item in body.get("games", [])
         ]
@@ -134,11 +135,22 @@ class SteamClient:
             return PlayerProfile(steamid=steamid, games=games, valid=False, reason="visible library is too small for group taste modeling")
         return PlayerProfile(steamid=steamid, games=games)
 
-    async def app_details(self, appid: int, source_marks: list[str] | None = None) -> GameRecord | None:
+    def _cached_record(self, appid: int, source_marks: list[str] | None = None) -> GameRecord | None:
         cached = self.cache.get_game(appid)
         if cached and cached.get("language") == STEAM_STORE_LANGUAGE and cached.get("cache_version") == GAME_RECORD_CACHE_VERSION:
             cached["source_marks"] = sorted(set(cached.get("source_marks", []) + (source_marks or [])))
             return GameRecord(**cached)
+        return None
+
+    async def app_details(
+        self,
+        appid: int,
+        source_marks: list[str] | None = None,
+        tag_weights: dict[str, int] | None = None,
+    ) -> GameRecord | None:
+        cached = self._cached_record(appid, source_marks)
+        if cached:
+            return cached
         if self.cache.get_http(f"appdetails_miss:{appid}", max_age=STEAM_MISS_TTL_SECONDS):
             return None
 
@@ -187,6 +199,7 @@ class SteamClient:
             tags=tags,
             categories=category_names,
             genres=genre_names,
+            tag_weights=tag_weights or {},
             release_date=(data.get("release_date") or {}).get("date"),
             coming_soon=bool((data.get("release_date") or {}).get("coming_soon", False)),
             review_percent=review_percent,
@@ -202,13 +215,18 @@ class SteamClient:
         return record
 
     async def app_details_many(self, appids: Iterable[int], source_map: dict[int, list[str]] | None = None) -> list[GameRecord]:
+        from .tags import fetch_tag_weights
+
+        appid_list = list(appids)
+        missing = [appid for appid in appid_list if self._cached_record(appid) is None]
+        tag_map = await fetch_tag_weights(missing) if missing else {}
         sem = _steam_semaphore()
 
         async def fetch(appid: int) -> GameRecord | None:
             async with sem:
-                return await self.app_details(appid, (source_map or {}).get(appid, []))
+                return await self.app_details(appid, (source_map or {}).get(appid, []), tag_map.get(appid))
 
-        records = await asyncio.gather(*(fetch(appid) for appid in appids))
+        records = await asyncio.gather(*(fetch(appid) for appid in appid_list))
         return [record for record in records if record is not None]
 
 

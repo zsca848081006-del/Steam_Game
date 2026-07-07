@@ -6,32 +6,73 @@ from collections import Counter, defaultdict
 from .awards import TGA_MULTIPLAYER_MARKS
 from .candidates import FRESH_CANDIDATES, MAIN_CANDIDATES
 from .models import GameRecord, PlayerProfile, Recommendation
-from .steam_api import is_multiplayer
+from .steam_api import NOISE_TAGS, is_multiplayer
 from .tag_aliases import expand_user_terms, term_matches
+
+
+# 近两周时长的放大倍数：让"最近在玩"主导口味，而不是被多年累计时长绑架。
+RECENT_PLAYTIME_MULTIPLIER = 25
+
+# 余弦相似度达到该值即视为满分匹配（fit 98%），用于推荐度的绝对标定。
+FIT_COSINE_CAP = 0.55
+
+
+def _record_shares(record: GameRecord) -> dict[str, float]:
+    """游戏的标签分布。键：投票标签用 str(tagid)，genre 回退用名字本身。"""
+    if record.tag_weights:
+        total = sum(record.tag_weights.values())
+        if total > 0:
+            return {key: weight / total for key, weight in record.tag_weights.items()}
+    tags = record.tags[:8]
+    if not tags:
+        return {}
+    return {tag: 1 / len(tags) for tag in tags}
+
+
+def resolve_tag_name(key: str, tag_names: dict[int, str]) -> str:
+    if key.isdigit():
+        return tag_names.get(int(key), f"tag{key}")
+    return key
+
+
+def apply_display_tags(records: list[GameRecord], tag_names: dict[int, str]) -> None:
+    """把投票标签解析成当前语言的展示名写回 record.tags(UI/DeepSeek/口味证据共用)。"""
+    for record in records:
+        if not record.tag_weights or not tag_names:
+            continue
+        ordered = sorted(record.tag_weights.items(), key=lambda item: item[1], reverse=True)
+        names = []
+        for key, _ in ordered:
+            name = resolve_tag_name(key, tag_names)
+            if name.lower() in NOISE_TAGS or name.startswith("tag"):
+                continue
+            names.append(name)
+        if names:
+            record.tags = names[:12]
 
 
 def build_group_taste(players: list[PlayerProfile], owned_records: dict[int, GameRecord]) -> tuple[dict[str, float], str]:
     normalized_people: list[dict[str, float]] = []
     for player in players:
-        weights: Counter[str] = Counter()
+        weights: defaultdict[str, float] = defaultdict(float)
         for game in player.games:
             record = owned_records.get(game.appid)
             if not record or game.playtime_forever <= 0:
                 continue
-            signal = math.sqrt(game.playtime_forever)
-            for tag in record.tags[:16]:
-                weights[tag] += signal
+            signal = math.sqrt(game.playtime_forever + RECENT_PLAYTIME_MULTIPLIER * game.playtime_2weeks)
+            for key, share in _record_shares(record).items():
+                weights[key] += signal * share
         total = sum(weights.values())
         if total:
-            normalized_people.append({tag: value / total for tag, value in weights.items()})
+            normalized_people.append({key: value / total for key, value in weights.items()})
 
     group: defaultdict[str, float] = defaultdict(float)
     if not normalized_people:
         return {}, "insufficient"
 
     for person in normalized_people:
-        for tag, value in person.items():
-            group[tag] += value / len(normalized_people)
+        for key, value in person.items():
+            group[key] += value / len(normalized_people)
 
     values = sorted(group.values(), reverse=True)
     if not values:
@@ -43,6 +84,22 @@ def build_group_taste(players: list[PlayerProfile], owned_records: dict[int, Gam
     else:
         distribution = "mixed"
     return dict(group), distribution
+
+
+def top_group_tags(group: dict[str, float], tag_names: dict[int, str], limit: int = 20) -> list[tuple[str, float]]:
+    """展示/证据用的群体口味标签：解析名字、滤噪声、重新归一。"""
+    named: list[tuple[str, float]] = []
+    for key, value in sorted(group.items(), key=lambda item: item[1], reverse=True):
+        name = resolve_tag_name(key, tag_names)
+        if name.lower() in NOISE_TAGS or name.startswith("tag"):
+            continue
+        named.append((name, value))
+        if len(named) >= limit:
+            break
+    total = sum(value for _, value in named)
+    if total <= 0:
+        return []
+    return [(name, value / total) for name, value in named]
 
 
 def build_taste_evidence(
@@ -102,6 +159,28 @@ def build_taste_evidence(
     return {"tag_evidence": tag_evidence, "top_played_games": overall_examples}
 
 
+def _tag_idf(records: list[GameRecord]) -> dict[str, float]:
+    """按候选池文档频率降权烂大街标签：出现在所有候选里的标签权重归零。"""
+    df: Counter[str] = Counter()
+    for record in records:
+        df.update(_record_shares(record).keys())
+    n = max(len(records), 1)
+    return {key: math.log(n / count) for key, count in df.items()}
+
+
+def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
+    if not a or not b:
+        return 0.0
+    dot = sum(value * b[key] for key, value in a.items() if key in b)
+    if dot <= 0:
+        return 0.0
+    norm_a = math.sqrt(sum(value * value for value in a.values()))
+    norm_b = math.sqrt(sum(value * value for value in b.values()))
+    if norm_a <= 0 or norm_b <= 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 def score_candidates(
     records: list[GameRecord],
     group_tags: dict[str, float],
@@ -110,7 +189,9 @@ def score_candidates(
     pass_tags: list[str],
     required_players: int | None = None,
     exclude_owned: bool = True,
+    tag_names: dict[int, str] | None = None,
 ) -> list[Recommendation]:
+    tag_names = tag_names or {}
     owned_by_app: dict[int, list[str]] = defaultdict(list)
     for player in players:
         for game in player.games:
@@ -118,6 +199,8 @@ def score_candidates(
 
     boost = expand_user_terms(boost_tags)
     passed = expand_user_terms(pass_tags)
+    idf = _tag_idf(records)
+    group_vector = {key: value * idf.get(key, 0.0) for key, value in group_tags.items()}
     recommendations: list[Recommendation] = []
 
     for record in records:
@@ -132,35 +215,46 @@ def score_candidates(
         if len(owned_by) == len(players):
             continue
 
-        searchable_terms = record.tags + record.source_marks + record.categories
+        shares = _record_shares(record)
+        share_names = {key: resolve_tag_name(key, tag_names) for key in shares}
+        if boost or passed:
+            adjusted = {}
+            for key, share in shares.items():
+                if boost and term_matches(share_names[key], boost):
+                    share *= 2.5
+                if passed and term_matches(share_names[key], passed):
+                    share *= 0.15
+                adjusted[key] = share
+            shares = adjusted
+
+        candidate_vector = {key: share * idf.get(key, 0.0) for key, share in shares.items()}
+        similarity = _cosine(group_vector, candidate_vector)
+
+        matched = sorted(
+            (
+                (group_vector[key] * candidate_vector[key], share_names[key])
+                for key in candidate_vector
+                if key in group_vector and group_vector[key] * candidate_vector[key] > 0
+            ),
+            reverse=True,
+        )
+        matched_tags = [name for _, name in matched if name.lower() not in NOISE_TAGS][:4]
+
+        searchable_terms = list(share_names.values()) + record.source_marks + record.categories
         boost_match = bool(boost and any(term_matches(value, boost) for value in searchable_terms))
         pass_match = bool(passed and any(term_matches(value, passed) for value in searchable_terms))
 
-        tag_score = 0.0
-        matched_tags: list[str] = []
-        for tag in record.tags:
-            base = group_tags.get(tag, 0.0)
-            if boost and term_matches(tag, boost):
-                base *= 2.5
-            if passed and term_matches(tag, passed):
-                base *= 0.15
-            if base:
-                matched_tags.append(tag)
-            tag_score += base
+        score = similarity * (1 + 0.08 * min(len(matched_tags), 4))
         if boost_match:
-            tag_score += 0.14
-            matched_tags.extend(mark for mark in record.source_marks if term_matches(mark, boost))
+            score += 0.1
         if pass_match and not boost_match:
-            tag_score *= 0.35
-
-        multi_match_bonus = 1.0 + min(len(matched_tags), 4) * 0.12
-        quality = _quality_score(record)
-        ownership_bonus = 0.08 if owned_by else 0.0
-        source_bonus = 0.03 * len(record.source_marks)
-        score = tag_score * multi_match_bonus + quality + ownership_bonus + source_bonus
+            score *= 0.35
+        score += _quality_score(record)
+        score += 0.05 if owned_by else 0.0
+        score += 0.02 * len(record.source_marks)
         score *= _mainstream_factor(record)
         if any("新品" in mark or "即将推出" in mark for mark in record.source_marks):
-            score += 0.05
+            score += 0.03
         if score <= 0:
             continue
 
@@ -169,7 +263,7 @@ def score_candidates(
                 appid=record.appid,
                 name=record.name,
                 score=round(score, 5),
-                fit_percent=0,
+                fit_percent=_fit_percent(similarity),
                 store_url=record.store_url,
                 capsule_image=record.capsule_image,
                 tags=record.tags[:8],
@@ -182,7 +276,6 @@ def score_candidates(
         )
 
     recommendations.sort(key=lambda item: item.score, reverse=True)
-    _apply_fit_percent(recommendations)
     return recommendations[:20]
 
 
@@ -217,6 +310,8 @@ def _mainstream_factor(record: GameRecord) -> float:
     # 国民级大热门对开黑推荐几乎没有信息量，做温和降权，让中体量高口碑和新品有机会浮上来。
     if not record.review_count:
         return 1.0
+    if record.review_count >= 500_000:
+        return 0.55
     if record.review_count >= 200_000:
         return 0.7
     if record.review_count >= 80_000:
@@ -233,19 +328,9 @@ def _quality_score(record: GameRecord) -> float:
     return (record.review_percent / 100) * confidence * 0.2
 
 
-def _apply_fit_percent(recommendations: list[Recommendation]) -> None:
-    if not recommendations:
-        return
-    scores = [item.score for item in recommendations]
-    best = max(scores)
-    worst = min(scores)
-    spread = best - worst
-    for item in recommendations:
-        if spread <= 0.00001:
-            item.fit_percent = 86
-        else:
-            relative = (item.score - worst) / spread
-            item.fit_percent = max(55, min(98, round(55 + relative * 43)))
+def _fit_percent(similarity: float) -> int:
+    # 绝对标定：整体不匹配时不再有人虚标 98%。
+    return max(55, min(98, round(55 + 43 * min(similarity / FIT_COSINE_CAP, 1.0))))
 
 
 def _reason(record: GameRecord, matched_tags: list[str], owned_by: list[str], player_count: int) -> str:

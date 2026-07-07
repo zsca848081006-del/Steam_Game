@@ -34,6 +34,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - `steamrec/cache.py`：SQLite 游戏属性缓存。
 - `steamrec/candidates.py`：MVP 静态种子候选池和尝鲜档回退候选池。
 - `steamrec/ingest.py`：从 Steam 搜索自动进料候选池（近一年热门新品/高口碑多人/热销多人/即将推出），结果缓存 12 小时。
+- `steamrec/tags.py`：玩家投票标签。`GetTagList` 简中标签字典（缓存 7 天）+ `GetItems` 批量拉每游戏 top20 标签票数，均免 key。
 - `steamrec/awards.py`：TGA 多人相关获奖/提名的 Steam 可推荐子集。
 - `steamrec/localization.py`：候选游戏中文显示名兜底表。
 - `steamrec/tag_aliases.py`：中文标签联想词和用户输入别名扩展。
@@ -100,7 +101,7 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 - 加权/降权标签会经过别名扩展，并同时匹配 Steam genres、候选来源标记和多人 category。
 - 候选池由 `steamrec/ingest.py` 自动进料（Steam 搜索热销/评分/即将推出榜），叠加静态种子和 TGA 表；打分含大路货降权（评测数 ≥20 万 ×0.7、≥8 万 ×0.85）和新品加成。
 - 尝鲜档动态抓 Steam comingsoon，失败时回退 `FRESH_CANDIDATES` 静态表，候选标记为 `尝鲜档` / `Steam 即将推出`。
-- Steam store tags 暂用 genres 代替，标签粒度不足；categories 仅用于多人硬过滤。
+- 口味向量基于玩家投票标签（tagid+票数，448 维简中字典），打分为候选池内 IDF 降权后的余弦相似度，近两周时长 25 倍加成；无票数数据时回退 genre。categories 仅用于多人硬过滤。
 - TGA 数据是初版人工静态表，覆盖 Steam 可推荐的近年多人相关获奖/提名子集，还不是完整奖项数据库。
 - Steam API key 和 DeepSeek key 都由用户在网页填写、不落库；因为请求必须代理，两个 key 会随单次 HTTP 请求经过服务器进程。DeepSeek key 不填则跳过 AI 精排、回退算法排序。
 - Stitch 项目：`projects/9926863289475385038`；design system asset：`354742b8febc46e0b2345644e8b6daa0`。

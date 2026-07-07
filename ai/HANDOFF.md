@@ -1,6 +1,16 @@
 # 交接
 
-## 最近做了什么(本轮:访问统计)
+## 最近做了什么(本轮:口味向量升级,只在本地,未部署)
+
+- **注意:本轮改动只提交了 git,按用户要求暂未部署到阿里云**,线上仍是旧版口味逻辑;下次部署照常跑 `scripts/deploy_aliyun.sh` 即可。
+- 口味信号从十几维 genre 换成玩家投票标签:新增 `steamrec/tags.py`,`IStoreService/GetTagList`(简中标签字典,448 个,免 key,缓存 7 天)+ `IStoreBrowseService/GetItems`(每游戏 top20 标签带票数,免 key,支持批量,每批 40 个);`GameRecord` 新增 `tag_weights`(str(tagid)→票数),缓存版本升到 9(旧缓存自动重建,冷启动约 45 秒)。
+- `recommender.py` 重写打分:向量键为 str(tagid)(无票数时回退 genre 名);游戏标签按票数占比分摊;口味信号 `sqrt(playtime_forever + 25 * playtime_2weeks)` 给近两周游玩强加成;候选池内算 IDF(`log(N/df)`)降权烂大街标签,出现在全部候选里的标签(如"多人")权重归零;匹配改余弦相似度,消除"标签多天然得分高"偏差。
+- `fit_percent` 改绝对标定:`55 + 43 * min(cosine/0.55, 1)`(`FIT_COSINE_CAP`),整体不匹配时不再虚标 98%。
+- 大路货降权加一档:评测数 ≥50 万 ×0.55(此前 138 万评测的腐蚀仍能凭高相似度冲第一)。
+- 展示层:`apply_display_tags` 把 tagid 解析成简中名写回 `record.tags`(UI/DeepSeek/口味证据共用),`top_group_tags` 滤噪声并归一;boost/pass 标签现在直接对真实标签名匹配。
+- 本地验证:群体口味从"动作/冒险/独立"变成"开放世界生存制作/基地建设/自动化"级别;推荐咬住测试号的生存建造偏好;DeepSeek 理由开始引用具体游戏+细粒度标签("戴森球计划数百小时→热爱自动化→Factorio");热缓存约 21 秒(主要为 DeepSeek 耗时);Steam key 未触发限额。
+
+## 上一轮:访问统计
 
 - 新增 `steamrec/analytics.py`:埋点存独立 `data/analytics.sqlite`(WAL),events 表带时间戳;`page_view`(GET /)和 `recommend`(POST /api/recommend,meta 含 status/duration_ms/players,含 busy/bad_request/timeout 等失败态)两类事件;埋点异常静默吞掉,绝不影响正常请求。
 - 访客区分:无登录体系,用服务端一年期随机 cookie(`srvid`,HttpOnly,SameSite=Lax)近似区分浏览器;清 cookie/换设备会算新访客,精度"大概差不多"是预期内的。
@@ -60,9 +70,10 @@
 
 ## 遗留事项
 
-- 下一个质量瓶颈是口味信号:store tags 仍以 genres 兜底(十几维、区分度低,几乎所有游戏都命中"动作/冒险"),下一步接 `IStoreService/GetTagList`(支持简中)+ 带票数 tags,把口味向量换成细粒度标签,并改余弦相似度 + 烂大街标签 IDF 降权 + `playtime_2weeks` 近期加成。
-- `fit_percent` 是组内 min-max 拉伸(55–98),整体不匹配时第一名也显示 98%,需要改绝对标定。
-- `_max_players_hint` 把所有 co-op 一律当 4 人上限,用户要求 5 人以上时会误杀 8 人合作游戏。
+- **口味升级已完成但未上线**:部署前建议先在服务器跑一次冷启动验证(缓存版本 9 全量重建 + GetItems 批量接口在阿里云网络下的表现)。
+- `FIT_COSINE_CAP=0.55` 和 IDF/降权系数是按单个测试号标定的,多人真实小队数据进来后可能需要微调。
+- `_max_players_hint` 把所有 co-op 一律当 4 人上限,用户要求 5 人以上时会误杀 8 人合作游戏;GetItems 其实能返回更多字段,后续可评估从中取真实人数上限。
+- 口味建模仍只取每人 top30 游戏(`owned_appids`);标签维度细了之后,适当放宽到 top50 可能让口味更完整,注意请求量权衡。
 - 动态池冷缓存首次请求约 80 秒;若线上触发 Steam appdetails 限流(429),考虑进料后后台预热缓存。
 - 结果多样性:top 榜容易被同一品类刷屏,后续可加 MMR 式去重;再往后可做"不感兴趣/已玩腻"反馈闭环。
 - DeepSeek 理由依赖 `build_taste_evidence` 的库存证据;后续若接入玩家昵称,可把 SteamID 换成更友好的成员名。
