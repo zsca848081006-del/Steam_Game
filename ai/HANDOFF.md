@@ -1,5 +1,11 @@
 # 交接
 
+## 最近做了什么(本轮:README 更新)
+
+- 重写 GitHub 首页 `README.md`:补全项目定位、快速运行、候选池更新机制、API 示例、配置项、部署入口、项目结构、隐私/仓库卫生和已知边界。
+- 上传前已做敏感信息检查:`配置.md` 含本地 DeepSeek key 形态内容但被 `.gitignore` 排除;`data/game_cache.sqlite` 也不被 git 跟踪。
+- 远端仓库为 `git@github.com:zsca848081006-del/Steam_Game.git`,本地 `main` 跟踪 `origin/main`;推送使用仓库专用 deploy key `~/.ssh/steam_game_deploy`(`core.sshCommand` 已设置)。
+
 ## 最近做了什么(本轮:并发健壮性)
 
 - 保持标准库、不引第三方框架(本机 Python 3.14 编第三方包慢是既有约束,且瓶颈都在逻辑层)。改造为:单一共享 asyncio 事件循环(`app.py` 模块级 `_LOOP`,专用线程跑 `run_forever`,handler 用 `run_coroutine_threadsafe` 提交),替代原来每请求 `asyncio.run`。
