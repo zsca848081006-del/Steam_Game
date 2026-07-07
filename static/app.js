@@ -172,6 +172,8 @@ runButton.addEventListener("click", async () => {
   statusEl.textContent = "正在读取库存、刷新游戏属性并计算推荐...";
   recommendationsEl.innerHTML = "";
   freshRecommendationsEl.innerHTML = "";
+  tagsEl.classList.add("empty-state");
+  tagsEl.textContent = "正在计算共同口味...";
 
   try {
     const response = await fetch("/api/recommend", {
@@ -247,7 +249,11 @@ function setupTagHints(input, target) {
 
 function renderTags(tags, distribution) {
   distributionEl.textContent = distributionLabel(distribution);
+  tagsEl.classList.toggle("empty-state", !tags.length);
   tagsEl.innerHTML = tags.map(([tag, value]) => `<span class="tag">${escapeHtml(tag)} ${(value * 100).toFixed(1)}%</span>`).join("");
+  if (!tags.length) {
+    tagsEl.textContent = "没有足够的公开数据。";
+  }
 }
 
 function renderCards(target, items, variant) {

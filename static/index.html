@@ -11,86 +11,78 @@
     <header class="command-header">
       <div>
         <span class="system-label">Steam Signal Lab</span>
-        <h1>Steam 群体多人游戏推荐</h1>
-        <p>填自己的 Steam ID 从好友列表勾选队友，或直接粘贴队友的主页链接，基于库存、时长、心愿单和群体口味推荐适合这桌人的多人游戏。</p>
-      </div>
-      <div class="header-meter" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
+        <h1>一起找下个开黑游戏</h1>
+        <p>选队友，点生成。系统会读取公开库存、时长和心愿单，给出适合这桌人的多人游戏。</p>
       </div>
     </header>
 
     <section class="dashboard-grid">
       <div class="panel input-panel">
         <div class="section-head compact">
-          <h2>输入参数</h2>
-          <span class="pill">本地 key 不落库</span>
+          <h2>组队</h2>
+          <span class="pill">Key 可选</span>
         </div>
 
         <label>
-          <span>Steam Web API Key（可选）</span>
-          <input id="steamKey" type="password" autocomplete="off" placeholder="留空则使用站长的公共 key">
-          <small class="field-help">
-            留空会用站长的公共 key（人多时可能限额）。想用自己的？登录 Steam 后到
-            <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">Steam Web API Key 申请页</a>
-            获取，key 仅随本次请求转发，不写入服务器。
-          </small>
-        </label>
-
-        <label>
-          <span>DeepSeek API Key（可选）</span>
-          <input id="deepseekKey" type="password" autocomplete="off" placeholder="仅随本次请求转发；不填则跳过 AI 精排">
-          <small class="field-help">
-            填写后由 AI 精排并生成推荐理由，用你自己的额度。到
-            <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">DeepSeek 开放平台</a>
-            创建。
-          </small>
-        </label>
-
-        <label>
-          <span>从好友列表选队友（推荐）</span>
+          <span>从好友列表选队友</span>
           <div class="friend-fetch-row">
             <input id="friendSelf" type="text" autocomplete="off" placeholder="你自己的 SteamID64 或主页链接">
             <button id="fetchFriends" type="button" class="secondary-button">拉取好友</button>
           </div>
-          <small id="friendsHint" class="field-help">填你自己的 ID，点按钮后直接勾选队友，不用一个个找链接。</small>
+          <small id="friendsHint" class="field-help">拉取后点头像勾选；列表私密时可手动粘贴链接。</small>
         </label>
         <div id="friendsList" class="friends-grid"></div>
 
         <label>
-          <span>Steam ID 列表</span>
-          <textarea id="steamIds" rows="5" placeholder="勾选好友会自动填到这里；也可以每行手动粘贴一个 SteamID64 或 Steam 个人主页链接"></textarea>
-          <small class="field-help">上面勾选的好友会自动加进来；手动粘贴主页链接也行，我们会自动解析。</small>
+          <span>队友列表</span>
+          <textarea id="steamIds" rows="5" placeholder="每行一个 SteamID64 或个人主页链接"></textarea>
         </label>
 
-        <div class="row">
-          <label>
-            <span>开黑人数</span>
-            <input id="requiredPlayers" type="number" min="2" max="16" placeholder="可选">
-          </label>
-          <label class="check">
-            <input id="includeFresh" type="checkbox">
-            <span>包含尝鲜档</span>
-          </label>
-          <label class="check">
-            <input id="excludeOwned" type="checkbox" checked>
-            <span>只推全员都没有的</span>
-          </label>
-        </div>
+        <details class="advanced-panel">
+          <summary>高级设置</summary>
+          <div class="advanced-content">
+            <div class="row">
+              <label>
+                <span>Steam Key</span>
+                <input id="steamKey" type="password" autocomplete="off" placeholder="留空用公共 key">
+                <small class="field-help"><a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">申请 Steam Key</a>，仅随本次请求转发。</small>
+              </label>
+              <label>
+                <span>DeepSeek Key</span>
+                <input id="deepseekKey" type="password" autocomplete="off" placeholder="不填则跳过 AI 精排">
+                <small class="field-help"><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">创建 DeepSeek Key</a>，使用你自己的额度。</small>
+              </label>
+            </div>
 
-        <div class="row">
-          <label>
-            <span>加权标签</span>
-            <input id="boostTags" list="tagSuggestions" placeholder="用逗号分隔，如 生存,合作射击">
-            <div id="boostTagHints" class="tag-hints"></div>
-          </label>
-          <label>
-            <span>降权标签</span>
-            <input id="passTags" list="tagSuggestions" placeholder="软 pass，如 竞技,格斗">
-            <div id="passTagHints" class="tag-hints"></div>
-          </label>
-        </div>
+            <div class="option-grid">
+              <label>
+                <span>开黑人数</span>
+                <input id="requiredPlayers" type="number" min="2" max="16" placeholder="可选">
+              </label>
+              <label class="check">
+                <input id="includeFresh" type="checkbox">
+                <span>包含尝鲜档</span>
+              </label>
+              <label class="check">
+                <input id="excludeOwned" type="checkbox" checked>
+                <span>只推全员未拥有</span>
+              </label>
+            </div>
+
+            <div class="row">
+              <label>
+                <span>加权标签</span>
+                <input id="boostTags" list="tagSuggestions" placeholder="生存,合作射击">
+                <div id="boostTagHints" class="tag-hints"></div>
+              </label>
+              <label>
+                <span>降权标签</span>
+                <input id="passTags" list="tagSuggestions" placeholder="竞技,格斗">
+                <div id="passTagHints" class="tag-hints"></div>
+              </label>
+            </div>
+          </div>
+        </details>
         <datalist id="tagSuggestions"></datalist>
 
         <div class="action-row">
@@ -104,14 +96,13 @@
           <h2>共同口味</h2>
           <span id="distribution" class="pill">等待计算</span>
         </div>
-        <div id="tags" class="tags"></div>
+        <div id="tags" class="tags empty-state">生成后显示这桌人的主要口味。</div>
       </div>
     </section>
 
     <section class="results">
       <div class="section-head">
         <h2>主线档</h2>
-        <span class="muted">已发售、有口碑信号优先</span>
       </div>
       <div id="recommendations" class="cards"></div>
     </section>
@@ -119,7 +110,6 @@
     <section class="results">
       <div class="section-head">
         <h2>尝鲜档</h2>
-        <span class="muted">未发售 / 新内容，置信度较低</span>
       </div>
       <div id="freshRecommendations" class="cards"></div>
     </section>

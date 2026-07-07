@@ -1,5 +1,14 @@
 # 交接
 
+## 最近做了什么(本轮:UI 精简降噪)
+
+- 按用户反馈"文字太多、一眼复杂"调用 `impeccable` 的 product/distill 流程，保留现有功能但重构首屏信息层级。
+- 首页标题从机制说明改为任务导向「一起找下个开黑游戏」，首段压缩为一句；移除顶部装饰 meter，减少首屏视觉噪声。
+- 默认主路径只保留：从好友列表选队友、队友列表、生成推荐、共同口味空态；Steam Key / DeepSeek Key / 开黑人数 / 尝鲜档 / 拥有过滤 / 加权降权标签统一收进「高级设置」折叠区。
+- 精简字段说明：好友提示、队友列表 placeholder、结果区副标题都缩短或移除；共同口味增加生成前空态，生成时切换为「正在计算共同口味...」。
+- CSS 同步收窄页面宽度、降低面板边框强调、添加折叠高级设置样式与移动端单列适配；未改推荐算法/API。
+- 本地验证：`node /Users/nan/.codex/skills/impeccable/scripts/detect.mjs --json static/index.html static/styles.css static/app.js` 仅有既有设计系统 advisory；`.venv/bin/python -m py_compile app.py steamrec/*.py` 通过；`STEAMREC_PORT=8676 .venv/bin/python app.py` 本地预览，桌面/390px 移动端无横向溢出，移动端截图检查通过。
+
 ## 最近做了什么(本轮:好友勾选组队)
 
 - 针对"访客凑不齐队友 ID"的转化断点,上线好友勾选:`POST /api/friends`(entry=ID/主页链接,key 可选走兜底)→ `GetFriendList` + `GetPlayerSummaries`(批量 100/次,好友截断 300)返回 owner + 好友昵称/头像/资料可见性。
