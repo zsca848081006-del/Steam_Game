@@ -1,6 +1,13 @@
 # 交接
 
-## 最近做了什么(本轮:兜底 Steam Key + 主页链接解析)
+## 最近做了什么(本轮:心愿单权重 + 价格展示)
+
+- 心愿单:`IWishlistService/GetWishlist`(免 key,公开心愿单)拉每个有效玩家的心愿单;共同心愿(≥2 人)全部进候选,单人心愿每人限最近 `WISHLIST_SOLO_LIMIT=15` 个;打分加成为陡曲线 `WISHLIST_BONUS_MAX(0.35) * (命中人数/总人数)^2`(4 人桌:1 人 +0.022,2 人 +0.0875,4 人 +0.35);心愿单里的单人游戏被既有 `is_multiplayer` 过滤自动排除;卡片标记 `X/N 人心愿单`,理由第一句会提及。
+- 价格:appdetails 加 `price_overview` filter + `cc=cn`(人民币),`GameRecord`/`Recommendation` 新增 price 字段(单位分);"历史最低"因 Steam 官方不提供、免费第三方源(ITAD 等)都要注册 key,实现为**本站观测史低**:每次刷新在 `steam_http_cache` 的 `price_low:{appid}` 记最低观测价,随时间变准;前端绿色价格 tag 展示 现价/折扣/划线原价 + 观测史低。缓存版本升 10。
+- README 重写:补齐所有现状功能,按用户要求明确"本项目由 AI(Claude/Claude Code)开发,人类负责产品方向与验收";并已推送 GitHub(`origin`,deploy key `~/.ssh/steam_game_deploy`)。
+- 本地验证:4 人小队实测,心愿单候选入池(含 2 人共同心愿 Go-Go Town!),价格/折扣正常(正值夏促,观测史低已即刻记到折扣价)。
+
+## 上一轮:兜底 Steam Key + 主页链接解析
 
 - 站长 Steam Key 部署为兜底:网页 key 留空时后端用 `FALLBACK_STEAM_API_KEY`(本地读 `配置.md` `steamapi：`,远端 env `STEAMREC_FALLBACK_STEAM_KEY`,部署脚本自动写入 `/etc/steam-group-rec.env`);前端 key 字段改为可选并说明。
 - key 错误分类:`SteamKeyError`(401/403=denied,429=rate_limited,注意 **Steam 对坏 key 返回 401** 不是 403)→ 兜底 key 出错提示"站长的公共 Key 暂时不可用,请填自己的"(`error_code: fallback_key_failed`,前端附申请链接并聚焦 key 输入框);用户自己的 key 出错提示无效/被限流(`user_key_failed`)。库存私密/太小仍按玩家单独排除,不与 key 错误混淆(私密资料是 200+空 response,不走 401)。

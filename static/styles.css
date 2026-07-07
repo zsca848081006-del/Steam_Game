@@ -311,6 +311,17 @@ button:disabled {
   line-height: 1;
 }
 
+.price-tag {
+  border-color: rgba(122, 255, 160, .35);
+  background: rgba(122, 255, 160, .10);
+  color: #c9ffdc;
+}
+
+.price-tag s {
+  opacity: .55;
+  margin: 0 2px;
+}
+
 .tag:nth-child(3n) {
   border-color: rgba(157, 107, 255, .32);
   background: rgba(157, 107, 255, .10);

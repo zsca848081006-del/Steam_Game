@@ -151,6 +151,17 @@ class SteamClient:
             return PlayerProfile(steamid=steamid, games=games, valid=False, reason="可见库存太小，不足以参与口味建模")
         return PlayerProfile(steamid=steamid, games=games)
 
+    async def wishlist(self, steamid: str) -> list[int]:
+        """公开心愿单的 appid 列表，按加入时间新到旧；私密或失败返回空。"""
+        url = f"{STEAM_API_BASE}/IWishlistService/GetWishlist/v1/"
+        try:
+            body = await asyncio.to_thread(_get_json, url, {"steamid": steamid})
+        except Exception:
+            return []
+        items = body.get("response", {}).get("items", [])
+        items.sort(key=lambda item: item.get("date_added", 0), reverse=True)
+        return [int(item["appid"]) for item in items if item.get("appid")]
+
     async def resolve_steam_id(self, api_key: str, entry: str) -> str | None:
         """把用户输入(SteamID64 / 主页链接 / 自定义名)解析成 SteamID64；解析失败返回 None。"""
         entry = entry.strip().rstrip("/")
@@ -205,7 +216,7 @@ class SteamClient:
         detail_task = asyncio.to_thread(
             _get_json,
             detail_url,
-            {"appids": appid, "filters": "basic,categories,genres,release_date", "l": STEAM_STORE_LANGUAGE},
+            {"appids": appid, "filters": "basic,categories,genres,release_date,price_overview", "l": STEAM_STORE_LANGUAGE, "cc": "cn"},
         )
         review_task = asyncio.to_thread(
             _get_json,
@@ -239,6 +250,15 @@ class SteamClient:
             review_percent = summary.get("review_score")
             review_count = summary.get("total_reviews")
 
+        price = data.get("price_overview") or {}
+        price_final = 0 if data.get("is_free") else price.get("final")
+        price_lowest = None
+        if price_final is not None:
+            stored = self.cache.get_http(f"price_low:{appid}", max_age=None)
+            price_lowest = price_final if stored is None else min(int(stored["low"]), int(price_final))
+            if stored is None or price_lowest < int(stored["low"]):
+                self.cache.put_http(f"price_low:{appid}", {"low": price_lowest})
+
         record = GameRecord(
             appid=appid,
             name=display_name(appid, data.get("name", f"App {appid}")),
@@ -246,6 +266,11 @@ class SteamClient:
             categories=category_names,
             genres=genre_names,
             tag_weights=tag_weights or {},
+            price_final=price_final,
+            price_initial=price.get("initial"),
+            price_discount=price.get("discount_percent"),
+            price_currency="CNY" if data.get("is_free") else price.get("currency"),
+            price_lowest=price_lowest,
             release_date=(data.get("release_date") or {}).get("date"),
             coming_soon=bool((data.get("release_date") or {}).get("coming_soon", False)),
             review_percent=review_percent,

@@ -137,6 +137,7 @@ function renderCards(target, items, variant) {
     const tags = item.tags.slice(0, 4).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("");
     const marks = item.source_marks.slice(0, 2).map((mark) => `<span class="tag">${escapeHtml(mark)}</span>`).join("");
     const reviews = item.review_percent ? `<span class="tag">近期口碑 ${item.review_percent}/10</span>` : "";
+    const price = priceHtml(item);
     const fitPercent = Number(item.fit_percent || 0);
     const fit = fitPercent ? `<span class="fit-meter" style="--fit:${fitPercent}"><strong>${fitPercent}</strong><small>%</small></span>` : "";
     return `
@@ -148,12 +149,36 @@ function renderCards(target, items, variant) {
         </div>
         <div class="card-body">
           <h3><a href="${item.store_url}" target="_blank" rel="noreferrer">${escapeHtml(item.name)}</a></h3>
-          <div class="meta">${reviews}${marks}${tags}</div>
+          <div class="meta">${price}${reviews}${marks}${tags}</div>
           <p class="reason">${escapeHtml(item.reason)}</p>
         </div>
       </article>
     `;
   }).join("");
+}
+
+function priceHtml(item) {
+  if (item.price_final === null || item.price_final === undefined) {
+    return "";
+  }
+  if (item.price_final === 0) {
+    return `<span class="tag price-tag">免费</span>`;
+  }
+  const symbol = item.price_currency === "CNY" ? "¥" : `${item.price_currency || ""} `;
+  const fmt = (cents) => `${symbol}${(cents / 100).toFixed(2)}`;
+  let html = `<span class="tag price-tag">现价 ${fmt(item.price_final)}`;
+  if (item.price_discount) {
+    html += ` <s>${fmt(item.price_initial)}</s> −${item.price_discount}%`;
+  }
+  html += `</span>`;
+  if (item.price_lowest !== null && item.price_lowest !== undefined) {
+    if (item.price_lowest < item.price_final) {
+      html += `<span class="tag">观测史低 ${fmt(item.price_lowest)}</span>`;
+    } else {
+      html += `<span class="tag">现价即观测史低</span>`;
+    }
+  }
+  return html;
 }
 
 function distributionLabel(value) {

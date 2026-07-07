@@ -26,6 +26,7 @@ from steamrec.config import (
     MAX_CONCURRENT_RECOMMENDATIONS,
     RECOMMENDATION_TIMEOUT_SECONDS,
     STATS_TOKEN,
+    WISHLIST_SOLO_LIMIT,
     STATS_TZ_OFFSET_HOURS,
     STEAM_STORE_LANGUAGE,
 )
@@ -253,6 +254,16 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
         if not group_tags:
             raise RecommendationError("有效库存时长不足，无法生成口味向量。")
 
+        wishlists = await asyncio.gather(*(client.wishlist(player.steamid) for player in valid_players))
+        wishlist_counts: dict[int, int] = {}
+        for wl in wishlists:
+            for appid in wl:
+                wishlist_counts[appid] = wishlist_counts.get(appid, 0) + 1
+        wishlist_candidates = {appid for appid, count in wishlist_counts.items() if count >= 2}
+        for wl in wishlists:
+            solo = [appid for appid in wl if wishlist_counts.get(appid) == 1][:WISHLIST_SOLO_LIMIT]
+            wishlist_candidates.update(solo)
+
         dynamic_main, dynamic_fresh, pool_status = await load_candidate_pools(client.cache)
         print(f"candidate pool: {pool_status}")
         source_map, fresh_ids = candidate_source_map(
@@ -260,6 +271,9 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             dynamic_main=dynamic_main,
             dynamic_fresh=dynamic_fresh,
         )
+        for appid in wishlist_candidates:
+            if appid not in source_map:
+                source_map[appid] = ["心愿单"]
         candidate_records = await client.app_details_many(source_map.keys(), source_map)
         apply_display_tags(candidate_records, tag_names)
         main_records = [record for record in candidate_records if record.appid not in fresh_ids]
@@ -274,6 +288,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
             payload.required_players,
             payload.exclude_owned,
             tag_names,
+            wishlist_counts,
         )
         fresh_recommendations = (
             score_candidates(
@@ -285,6 +300,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
                 payload.required_players,
                 payload.exclude_owned,
                 tag_names,
+                wishlist_counts,
             )
             if payload.include_fresh
             else []

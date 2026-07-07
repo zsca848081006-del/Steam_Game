@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 
 from .awards import TGA_MULTIPLAYER_MARKS
 from .candidates import FRESH_CANDIDATES, MAIN_CANDIDATES
+from .config import WISHLIST_BONUS_MAX
 from .models import GameRecord, PlayerProfile, Recommendation
 from .steam_api import NOISE_TAGS, is_multiplayer
 from .tag_aliases import expand_user_terms, term_matches
@@ -190,8 +191,10 @@ def score_candidates(
     required_players: int | None = None,
     exclude_owned: bool = True,
     tag_names: dict[int, str] | None = None,
+    wishlist_counts: dict[int, int] | None = None,
 ) -> list[Recommendation]:
     tag_names = tag_names or {}
+    wishlist_counts = wishlist_counts or {}
     owned_by_app: dict[int, list[str]] = defaultdict(list)
     for player in players:
         for game in player.games:
@@ -255,8 +258,16 @@ def score_candidates(
         score *= _mainstream_factor(record)
         if any("新品" in mark or "即将推出" in mark for mark in record.source_marks):
             score += 0.03
+
+        wishlist_count = wishlist_counts.get(record.appid, 0)
+        # 陡曲线：1/3 人 ≈ 4% 上限，2/3 人 ≈ 44%，全员拿满。共同心愿 >> 个人心愿。
+        score += WISHLIST_BONUS_MAX * (wishlist_count / max(len(players), 1)) ** 2
         if score <= 0:
             continue
+
+        source_marks = record.source_marks
+        if wishlist_count:
+            source_marks = [f"{wishlist_count}/{len(players)} 人心愿单"] + [mark for mark in source_marks if mark != "心愿单"]
 
         recommendations.append(
             Recommendation(
@@ -267,11 +278,17 @@ def score_candidates(
                 store_url=record.store_url,
                 capsule_image=record.capsule_image,
                 tags=record.tags[:8],
-                source_marks=record.source_marks,
+                source_marks=source_marks,
                 review_percent=record.review_percent,
                 review_count=record.review_count,
                 owned_by=owned_by,
-                reason=_reason(record, matched_tags, owned_by, len(players)),
+                wishlist_count=wishlist_count,
+                price_final=record.price_final,
+                price_initial=record.price_initial,
+                price_discount=record.price_discount,
+                price_currency=record.price_currency,
+                price_lowest=record.price_lowest,
+                reason=_reason(record, matched_tags, owned_by, len(players), wishlist_count),
             )
         )
 
@@ -333,8 +350,10 @@ def _fit_percent(similarity: float) -> int:
     return max(55, min(98, round(55 + 43 * min(similarity / FIT_COSINE_CAP, 1.0))))
 
 
-def _reason(record: GameRecord, matched_tags: list[str], owned_by: list[str], player_count: int) -> str:
+def _reason(record: GameRecord, matched_tags: list[str], owned_by: list[str], player_count: int, wishlist_count: int = 0) -> str:
     parts: list[str] = []
+    if wishlist_count:
+        parts.append(f"心愿单：这桌已有 {wishlist_count}/{player_count} 人把它加入了心愿单")
     if matched_tags:
         parts.append("适合点：和这桌的共同偏好重合在 " + "、".join(matched_tags[:3]))
     if record.review_percent and record.review_count:

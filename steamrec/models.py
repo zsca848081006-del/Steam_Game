@@ -67,6 +67,12 @@ class GameRecord:
     genres: list[str] = field(default_factory=list)
     # 玩家投票标签 {tagid(str): 票数}；JSON round-trip 需要字符串键，展示名按请求语言另行解析。
     tag_weights: dict[str, int] = field(default_factory=dict)
+    # 价格单位为分；price_lowest 是本站历次刷新观测到的最低价，不是全网史低。
+    price_final: int | None = None
+    price_initial: int | None = None
+    price_discount: int | None = None
+    price_currency: str | None = None
+    price_lowest: int | None = None
     release_date: str | None = None
     coming_soon: bool = False
     review_percent: int | None = None
@@ -96,6 +102,12 @@ class Recommendation:
     review_percent: int | None = None
     review_count: int | None = None
     owned_by: list[str] = field(default_factory=list)
+    wishlist_count: int = 0
+    price_final: int | None = None
+    price_initial: int | None = None
+    price_discount: int | None = None
+    price_currency: str | None = None
+    price_lowest: int | None = None
 
 
 @dataclass
