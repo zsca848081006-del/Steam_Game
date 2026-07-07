@@ -12,7 +12,7 @@
       <div>
         <span class="system-label">Steam Signal Lab</span>
         <h1>Steam 群体多人游戏推荐</h1>
-        <p>输入 2-16 个公开 Steam ID，基于库存、时长、群体口味和 AI 证据推荐适合这桌人的多人游戏。</p>
+        <p>填自己的 Steam ID 从好友列表勾选队友，或直接粘贴队友的主页链接，基于库存、时长、心愿单和群体口味推荐适合这桌人的多人游戏。</p>
       </div>
       <div class="header-meter" aria-hidden="true">
         <span></span>
@@ -49,9 +49,19 @@
         </label>
 
         <label>
+          <span>从好友列表选队友（推荐）</span>
+          <div class="friend-fetch-row">
+            <input id="friendSelf" type="text" autocomplete="off" placeholder="你自己的 SteamID64 或主页链接">
+            <button id="fetchFriends" type="button" class="secondary-button">拉取好友</button>
+          </div>
+          <small id="friendsHint" class="field-help">填你自己的 ID，点按钮后直接勾选队友，不用一个个找链接。</small>
+        </label>
+        <div id="friendsList" class="friends-grid"></div>
+
+        <label>
           <span>Steam ID 列表</span>
-          <textarea id="steamIds" rows="5" placeholder="每行一个，支持 SteamID64 或 Steam 个人主页链接&#10;例：https://steamcommunity.com/profiles/7656119..."></textarea>
-          <small class="field-help">直接粘贴好友的 Steam 个人主页链接即可，我们会自动解析出 Steam ID。</small>
+          <textarea id="steamIds" rows="5" placeholder="勾选好友会自动填到这里；也可以每行手动粘贴一个 SteamID64 或 Steam 个人主页链接"></textarea>
+          <small class="field-help">上面勾选的好友会自动加进来；手动粘贴主页链接也行，我们会自动解析。</small>
         </label>
 
         <div class="row">

@@ -1,6 +1,15 @@
 # 交接
 
-## 最近做了什么(本轮:零提交诊断 + 前端漏斗埋点)
+## 最近做了什么(本轮:好友勾选组队)
+
+- 针对"访客凑不齐队友 ID"的转化断点,上线好友勾选:`POST /api/friends`(entry=ID/主页链接,key 可选走兜底)→ `GetFriendList` + `GetPlayerSummaries`(批量 100/次,好友截断 300)返回 owner + 好友昵称/头像/资料可见性。
+- **坑:GetFriendList 对"好友列表私密"和"坏 key"都返回 401**,用一次便宜的 `player_summaries` 调用区分:summaries 成功→列表私密(`friends_visible:false`,前端提示手动粘链接);也失败→SteamKeyError。key 错误映射复用 `_raise_key_error`(与 recommend 一致的 error_code)。
+- 前端:ID 输入区上方加"从好友列表选队友(推荐)"——填自己 ID→拉取→头像 chip 勾选墙;勾选/取消直接同步到下方 textarea(textarea 是唯一事实源,提交逻辑未动);自己 ID 自动加入;资料未公开的好友标灰(title 提示库存可能读不到);首页文案同步改。
+- 埋点:`friends` 事件(status: ok/private/超时/key 错误码 + 好友数)进 analytics,可在 /stats 事件明细看到。
+- 验证:本地 API(你的 ID 拉到 17 个好友)+ 浏览器预览交互(勾选/取消/textarea 同步/选中高亮)全部通过;注意浏览器测试时 chip 重渲染会使旧 DOM 引用失效,属预期。
+- `.claude/launch.json` 新增本地预览配置(端口 8676)。
+
+## 上一轮:零提交诊断 + 前端漏斗埋点
 
 - 用户反馈"十几个访客没人提交推荐"。数据诊断:16 独立访客/18 PV,`recommend` 事件仅 3 条且全是本机 curl 验证(IP 38.106.19.223 + UA curl);nginx 日志确认浏览器 POST 为 0——**没有任何服务端拦截,是用户根本没发出请求**;访客几乎全部 pv=1 即离开。
 - 结构性怀疑:上手门槛(要凑齐 ≥2 个好友 SteamID)+ 无 demo 路径;此前前端校验拦截("至少 2 个 ID")完全不可见。

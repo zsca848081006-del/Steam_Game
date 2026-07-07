@@ -16,6 +16,7 @@
 - 尝鲜推荐：可选抓取 Steam 即将推出的多人/合作游戏，单独形成尝鲜档。
 - 拥有过滤：默认只推荐全员都没有的游戏，也可放宽为"部分人有也可推荐"（补票开黑）。
 - 输入友好：SteamID64、`steamcommunity.com/profiles/...`、`steamcommunity.com/id/自定义名` 链接都能识别，自动解析去重。
+- 好友勾选：填自己的 ID 一键拉取公开好友列表（昵称+头像），点头像勾选队友即可组队，资料未公开的好友会标灰提示；好友列表私密时回退为手动粘贴链接。
 - 兜底 Key：站长可配置公共 Steam Key，用户留空即用；key 错误会区分"站长 key 不可用"和"用户自己的 key 无效/限流"分别提示。
 - AI 精排与中文理由：不填 DeepSeek key 时使用确定性算法；填写后只对已有候选做精排和理由生成，不允许 AI 编造 appid。
 - 并发保护：全进程共享 Steam 出站并发上限、推荐请求背压、候选池刷新单飞锁、SQLite WAL、失败负缓存和超时控制。
@@ -72,6 +73,10 @@ http://127.0.0.1:8673
   "ai_key_mode": "per_request"
 }
 ```
+
+### `POST /api/friends`
+
+请求 `{"entry": "你的 SteamID64 或主页链接", "steam_api_key": "可选"}`，返回 `owner`（你的 steamid/昵称/头像）、`friends_visible`（好友列表是否公开）和 `friends`（steamid/昵称/头像/资料可见性）。
 
 ### `POST /api/recommend`
 

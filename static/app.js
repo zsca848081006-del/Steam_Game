@@ -13,6 +13,10 @@ const distributionEl = document.querySelector("#distribution");
 const recommendationsEl = document.querySelector("#recommendations");
 const freshRecommendationsEl = document.querySelector("#freshRecommendations");
 const tagSuggestionsEl = document.querySelector("#tagSuggestions");
+const friendSelfInput = document.querySelector("#friendSelf");
+const fetchFriendsBtn = document.querySelector("#fetchFriends");
+const friendsListEl = document.querySelector("#friendsList");
+const friendsHintEl = document.querySelector("#friendsHint");
 const boostTagHintsEl = document.querySelector("#boostTagHints");
 const passTagHintsEl = document.querySelector("#passTagHints");
 
@@ -38,6 +42,101 @@ function track(event, meta) {
 }
 
 steamIdsInput.addEventListener("input", () => track("ids_input", {}), {once: true});
+
+let loadedFriends = [];
+
+function textareaIds() {
+  return steamIdsInput.value.split(/\s|,|，/).map((item) => item.trim()).filter(Boolean);
+}
+
+function ensureIdInTextarea(id) {
+  const ids = textareaIds();
+  if (!ids.includes(id)) {
+    ids.push(id);
+    steamIdsInput.value = ids.join("\n");
+  }
+}
+
+function toggleIdInTextarea(id) {
+  let ids = textareaIds();
+  if (ids.includes(id)) {
+    ids = ids.filter((item) => item !== id);
+  } else {
+    ids.push(id);
+  }
+  steamIdsInput.value = ids.join("\n");
+  renderFriends();
+}
+
+function renderFriends() {
+  if (!loadedFriends.length) {
+    friendsListEl.innerHTML = "";
+    return;
+  }
+  const selected = new Set(textareaIds());
+  friendsListEl.innerHTML = loadedFriends.map((friend) => {
+    const classes = ["friend-chip"];
+    if (selected.has(friend.steamid)) classes.push("selected");
+    if (!friend.visible) classes.push("hidden-profile");
+    const avatar = friend.avatar ? `<img src="${friend.avatar}" alt="">` : "";
+    const title = friend.visible ? "" : ' title="该好友资料未公开，库存可能读不到"';
+    return `<button type="button" class="${classes.join(" ")}" data-id="${friend.steamid}"${title}>${avatar}<span>${escapeHtml(friend.name || friend.steamid)}</span></button>`;
+  }).join("");
+}
+
+friendsListEl.addEventListener("click", (event) => {
+  const chip = event.target.closest("button[data-id]");
+  if (chip) {
+    toggleIdInTextarea(chip.dataset.id);
+  }
+});
+
+steamIdsInput.addEventListener("input", renderFriends);
+
+fetchFriendsBtn.addEventListener("click", async () => {
+  const entry = friendSelfInput.value.trim();
+  if (!entry) {
+    friendsHintEl.textContent = "先填你自己的 SteamID64 或个人主页链接。";
+    friendSelfInput.focus();
+    return;
+  }
+  fetchFriendsBtn.disabled = true;
+  friendsHintEl.textContent = "正在拉取好友列表...";
+  try {
+    const response = await fetch("/api/friends", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({entry, steam_api_key: steamKeyInput.value.trim()})
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.detail || "拉取失败");
+      error.code = data.error_code;
+      throw error;
+    }
+    ensureIdInTextarea(data.owner.steamid);
+    if (!data.friends_visible) {
+      loadedFriends = [];
+      renderFriends();
+      friendsHintEl.textContent = "你的 ID 已加入下方列表，但你的好友列表未公开，请手动粘贴队友的主页链接。";
+      return;
+    }
+    loadedFriends = data.friends;
+    renderFriends();
+    const hiddenCount = data.friends.filter((f) => !f.visible).length;
+    friendsHintEl.textContent = `你（${data.owner.name || data.owner.steamid}）已加入列表，点击头像勾选队友` +
+      (hiddenCount ? `；灰色的 ${hiddenCount} 位资料未公开，库存可能读不到。` : "。");
+  } catch (error) {
+    if (error.code === "fallback_key_failed" || error.code === "user_key_needed") {
+      friendsHintEl.innerHTML = `${escapeHtml(error.message)} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">点这里申请自己的 key</a>`;
+    } else {
+      friendsHintEl.textContent = error.message;
+    }
+    track("client_error", {code: error.code || "", message: `friends: ${String(error.message).slice(0, 180)}`});
+  } finally {
+    fetchFriendsBtn.disabled = false;
+  }
+});
 tagSuggestionsEl.innerHTML = tagSuggestions.map((tag) => `<option value="${escapeHtml(tag)}"></option>`).join("");
 setupTagHints(boostTagsInput, boostTagHintsEl);
 setupTagHints(passTagsInput, passTagHintsEl);

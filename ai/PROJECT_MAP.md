@@ -64,6 +64,10 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 
 访问统计页(PV/独立访客/推荐执行,按日汇总)。令牌本地在 `配置.md` `stats_token：`,远端在 `/etc/steam-group-rec.env`;为空或不匹配返回 404。访客用一年期 `srvid` cookie 近似区分。
 
+### `POST /api/friends`
+
+好友勾选：`{"entry": "SteamID64/主页链接", "steam_api_key": "可选，留空用兜底 key"}` → `owner` + `friends_visible` + `friends[]`(steamid/name/avatar/visible)。好友列表私密返回 `friends_visible: false`;key 错误同 recommend 的 error_code 语义。
+
 ### `POST /api/recommend`
 
 请求：

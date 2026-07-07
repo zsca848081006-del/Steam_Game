@@ -341,6 +341,60 @@ button:disabled {
   gap: 6px;
 }
 
+.friend-fetch-row {
+  display: flex;
+  gap: 8px;
+}
+
+.friend-fetch-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.secondary-button {
+  background: rgba(51, 245, 255, .12);
+  color: #c9fbff;
+  border: 1px solid rgba(51, 245, 255, .35);
+  white-space: nowrap;
+}
+
+.friends-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.friend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(51, 245, 255, .22);
+  background: rgba(51, 245, 255, .06);
+  color: #c9fbff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.friend-chip img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.friend-chip.selected {
+  border-color: var(--lime);
+  background: rgba(122, 255, 160, .14);
+  color: #d9ffe6;
+  box-shadow: 0 0 0 2px rgba(122, 255, 160, .18);
+}
+
+.friend-chip.hidden-profile {
+  opacity: .45;
+}
+
 .hint-button {
   border: 1px solid rgba(51, 245, 255, .24);
   background: rgba(51, 245, 255, .08);

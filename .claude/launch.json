@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "steamrec",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["app.py"],
+      "env": {"STEAMREC_PORT": "8676"},
+      "port": 8676
+    }
+  ]
+}

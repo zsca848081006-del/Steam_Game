@@ -151,6 +151,40 @@ class SteamClient:
             return PlayerProfile(steamid=steamid, games=games, valid=False, reason="可见库存太小，不足以参与口味建模")
         return PlayerProfile(steamid=steamid, games=games)
 
+    async def friend_list(self, api_key: str, steamid: str) -> list[str] | None:
+        """公开好友列表的 SteamID；好友列表私密返回 None；key 问题抛 SteamKeyError。"""
+        url = f"{STEAM_API_BASE}/ISteamUser/GetFriendList/v0001/"
+        try:
+            body = await asyncio.to_thread(_get_json, url, {"key": api_key, "steamid": steamid, "relationship": "friend"})
+        except PermissionError as exc:
+            # GetFriendList 对私密好友列表和坏 key 都返回 401：用一次便宜的 summaries 调用区分。
+            try:
+                await self.player_summaries(api_key, [steamid])
+            except Exception:
+                raise SteamKeyError("denied") from exc
+            return None
+        except Exception as exc:
+            if getattr(exc, "code", None) == 429:
+                raise SteamKeyError("rate_limited") from exc
+            raise
+        friends = body.get("friendslist", {}).get("friends", [])
+        return [str(item["steamid"]) for item in friends if item.get("steamid")][:300]
+
+    async def player_summaries(self, api_key: str, steamids: list[str]) -> dict[str, dict[str, object]]:
+        """批量玩家概要 {steamid: {name, avatar, visible}}；visible=资料公开(可读库存的前提)。"""
+        url = f"{STEAM_API_BASE}/ISteamUser/GetPlayerSummaries/v0002/"
+        result: dict[str, dict[str, object]] = {}
+        for start in range(0, len(steamids), 100):
+            chunk = steamids[start : start + 100]
+            body = await asyncio.to_thread(_get_json, url, {"key": api_key, "steamids": ",".join(chunk)})
+            for player in body.get("response", {}).get("players", []):
+                result[str(player["steamid"])] = {
+                    "name": player.get("personaname", ""),
+                    "avatar": player.get("avatarmedium") or player.get("avatar") or "",
+                    "visible": player.get("communityvisibilitystate") == 3,
+                }
+        return result
+
     async def wishlist(self, steamid: str) -> list[int]:
         """公开心愿单的 appid 列表，按加入时间新到旧；私密或失败返回空。"""
         url = f"{STEAM_API_BASE}/IWishlistService/GetWishlist/v1/"

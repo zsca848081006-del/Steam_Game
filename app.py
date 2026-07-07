@@ -99,6 +99,9 @@ class AppHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/track":
             self._track()
             return
+        if self.path == "/api/friends":
+            self._friends()
+            return
         if self.path != "/api/recommend":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -186,6 +189,37 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _friends(self) -> None:
+        visitor, _ = self._visitor()
+        status = "error"
+        count = 0
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            future = asyncio.run_coroutine_threadsafe(run_friends(payload), _LOOP)
+            try:
+                result = future.result(timeout=30)
+            except concurrent.futures.TimeoutError:
+                future.cancel()
+                status = "timeout"
+                self._json({"detail": "拉取好友列表超时，请稍后重试。"}, HTTPStatus.GATEWAY_TIMEOUT)
+                return
+            status = "ok" if result["friends_visible"] else "private"
+            count = len(result["friends"])
+            self._json(result)
+        except RecommendationError as exc:
+            body: dict[str, Any] = {"detail": str(exc)}
+            if exc.error_code:
+                body["error_code"] = exc.error_code
+                status = exc.error_code
+            else:
+                status = "unprocessable"
+            self._json(body, HTTPStatus.UNPROCESSABLE_ENTITY)
+        except Exception as exc:
+            self._json({"detail": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        finally:
+            _ANALYTICS.log("friends", visitor, self._client_ip(), {"status": status, "count": count})
+
     def _track(self) -> None:
         try:
             length = min(int(self.headers.get("Content-Length", "0")), 4096)
@@ -233,6 +267,47 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def _raise_key_error(exc: SteamKeyError, used_fallback: bool) -> None:
+    if used_fallback:
+        raise RecommendationError(
+            "站长的公共 Steam Key 暂时不可用（限额或失效），请填写你自己的 Steam Web API Key 后重试。",
+            "fallback_key_failed",
+        ) from exc
+    if exc.kind == "rate_limited":
+        raise RecommendationError("你的 Steam Web API Key 被 Steam 限流了，请稍后再试。", "user_key_failed") from exc
+    raise RecommendationError("你的 Steam Web API Key 无效或没有权限，请检查后重试。", "user_key_failed") from exc
+
+
+async def run_friends(payload: dict[str, Any]) -> dict[str, Any]:
+    client = SteamClient()
+    own_key = str(payload.get("steam_api_key", "")).strip()
+    api_key = own_key or FALLBACK_STEAM_API_KEY
+    entry = str(payload.get("entry", "")).strip()
+    if not entry:
+        raise RecommendationError("请先填写你自己的 SteamID64 或个人主页链接。")
+    if not api_key:
+        raise RecommendationError("站点未配置公共 Steam Key，请填写你自己的 Steam Web API Key。", "user_key_needed")
+    try:
+        steamid = await client.resolve_steam_id(api_key, entry)
+        if not steamid:
+            raise RecommendationError("无法解析这个输入，请粘贴 SteamID64 或 Steam 个人主页链接。")
+        friend_ids = await client.friend_list(api_key, steamid)
+        summaries = await client.player_summaries(api_key, [steamid] + (friend_ids or []))
+    except SteamKeyError as exc:
+        _raise_key_error(exc, not own_key)
+
+    owner_info = summaries.get(steamid, {})
+    owner = {"steamid": steamid, "name": owner_info.get("name", ""), "avatar": owner_info.get("avatar", "")}
+    if friend_ids is None:
+        return {"owner": owner, "friends_visible": False, "friends": []}
+    friends = [
+        {"steamid": fid, **summaries.get(fid, {"name": "", "avatar": "", "visible": False})}
+        for fid in friend_ids
+    ]
+    friends.sort(key=lambda item: (not item["visible"], str(item["name"]).lower()))
+    return {"owner": owner, "friends_visible": True, "friends": friends}
+
+
 async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
     client = SteamClient()
     api_key = payload.steam_api_key or FALLBACK_STEAM_API_KEY
@@ -256,14 +331,7 @@ async def run_recommendation(payload: RecommendRequest) -> RecommendResponse:
 
             raw_players = [await client.owned_games(api_key, steamid) for steamid in steam_ids]
         except SteamKeyError as exc:
-            if used_fallback:
-                raise RecommendationError(
-                    "站长的公共 Steam Key 暂时不可用（限额或失效），请填写你自己的 Steam Web API Key 后重试。",
-                    "fallback_key_failed",
-                ) from exc
-            if exc.kind == "rate_limited":
-                raise RecommendationError("你的 Steam Web API Key 被 Steam 限流了，请稍后再试。", "user_key_failed") from exc
-            raise RecommendationError("你的 Steam Web API Key 无效或没有权限，请检查后重试。", "user_key_failed") from exc
+            _raise_key_error(exc, used_fallback)
         valid_players = [player for player in raw_players if player.valid]
         excluded_players = [player for player in raw_players if not player.valid]
         if len(valid_players) < 2:
