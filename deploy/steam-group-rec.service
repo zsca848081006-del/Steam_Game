@@ -9,6 +9,8 @@ WorkingDirectory=/opt/steam-group-rec
 Environment=STEAMREC_HOST=127.0.0.1
 Environment=STEAMREC_PORT=8673
 Environment=STEAMREC_DATA_DIR=/opt/steam-group-rec/data
+# 只承载访问统计令牌；AI key 由用户网页填写，不落服务器。
+EnvironmentFile=-/etc/steam-group-rec.env
 ExecStart=/opt/steam-group-rec/.venv/bin/python /opt/steam-group-rec/app.py
 Restart=always
 RestartSec=3

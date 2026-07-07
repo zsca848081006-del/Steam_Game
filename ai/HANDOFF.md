@@ -1,6 +1,14 @@
 # 交接
 
-## 最近做了什么(本轮:README 更新)
+## 最近做了什么(本轮:访问统计)
+
+- 新增 `steamrec/analytics.py`:埋点存独立 `data/analytics.sqlite`(WAL),events 表带时间戳;`page_view`(GET /)和 `recommend`(POST /api/recommend,meta 含 status/duration_ms/players,含 busy/bad_request/timeout 等失败态)两类事件;埋点异常静默吞掉,绝不影响正常请求。
+- 访客区分:无登录体系,用服务端一年期随机 cookie(`srvid`,HttpOnly,SameSite=Lax)近似区分浏览器;清 cookie/换设备会算新访客,精度"大概差不多"是预期内的。
+- 统计页 `GET /stats?token=<令牌>`:总览卡片(PV/独立访客/推荐执行/成功)+ 最近 30 天按日表(UTC+8,`STEAMREC_STATS_TZ`)+ 最近 20 条事件;令牌为空或不匹配一律 404(hmac.compare_digest),页面 noindex、no-store,UI 任何地方不链接它。
+- 令牌链路:进不了 git;本地在 `配置.md` 的 `stats_token：...`(config.py 会读),远端由部署脚本从 配置.md 提取写入 `/etc/steam-group-rec.env`(600),service 模板恢复了 `EnvironmentFile=-`(现在只承载这个低敏感令牌,AI key 仍然不落服务器)。
+- 本地验证:cookie 首发/复用正确;PV、独立访客、成功/失败推荐计数正确;无/错令牌 404。
+
+## 上一轮:README 更新
 
 - 重写 GitHub 首页 `README.md`:补全项目定位、快速运行、候选池更新机制、API 示例、配置项、部署入口、项目结构、隐私/仓库卫生和已知边界。
 - 上传前已做敏感信息检查:`配置.md` 含本地 DeepSeek key 形态内容但被 `.gitignore` 排除;`data/game_cache.sqlite` 也不被 git 跟踪。

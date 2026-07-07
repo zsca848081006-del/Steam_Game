@@ -59,6 +59,10 @@ STEAMREC_PORT=8673 .venv/bin/python app.py
 {"status":"ok","cache_version":8,"store_language":"schinese","ai_key_mode":"per_request"}
 ```
 
+### `GET /stats?token=<令牌>`
+
+访问统计页(PV/独立访客/推荐执行,按日汇总)。令牌本地在 `配置.md` `stats_token：`,远端在 `/etc/steam-group-rec.env`;为空或不匹配返回 404。访客用一年期 `srvid` cookie 近似区分。
+
 ### `POST /api/recommend`
 
 请求：

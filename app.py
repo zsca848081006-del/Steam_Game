@@ -2,14 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import hmac
+import html
 import json
 import threading
+import time
+import uuid
 from dataclasses import asdict, is_dataclass
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from steamrec.analytics import Analytics
 from steamrec.config import (
     APP_HOST,
     APP_PORT,
@@ -17,6 +24,8 @@ from steamrec.config import (
     GAME_RECORD_CACHE_VERSION,
     MAX_CONCURRENT_RECOMMENDATIONS,
     RECOMMENDATION_TIMEOUT_SECONDS,
+    STATS_TOKEN,
+    STATS_TZ_OFFSET_HOURS,
     STEAM_STORE_LANGUAGE,
 )
 from steamrec.deepseek import refine_recommendations
@@ -38,6 +47,8 @@ threading.Thread(target=_LOOP.run_forever, name="steamrec-loop", daemon=True).st
 # 背压：同时计算的推荐请求上限，超出直接返回 503，不排队占线程。
 _RECOMMEND_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_RECOMMENDATIONS)
 
+_ANALYTICS = Analytics()
+
 
 class AppHandler(SimpleHTTPRequestHandler):
     server_version = "SteamGroupRec/0.1"
@@ -54,11 +65,19 @@ class AppHandler(SimpleHTTPRequestHandler):
             )
             return
         if self.path == "/" or self.path.startswith("/?"):
-            self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            visitor, is_new = self._visitor()
+            _ANALYTICS.log("page_view", visitor, self._client_ip())
+            cookie_header = None
+            if is_new:
+                cookie_header = {"Set-Cookie": f"srvid={visitor}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Lax"}
+            self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8", cookie_header)
             return
         if self.path.startswith("/static/"):
             relative = self.path.removeprefix("/static/").split("?", 1)[0]
             self._file(STATIC_DIR / relative, _content_type(relative))
+            return
+        if self.path.startswith("/stats"):
+            self._stats()
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -66,19 +85,37 @@ class AppHandler(SimpleHTTPRequestHandler):
         if self.path != "/api/recommend":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
+        visitor, _ = self._visitor()
+        started = time.time()
+        status = "error"
+        player_count = 0
+
+        def track() -> None:
+            _ANALYTICS.log(
+                "recommend",
+                visitor,
+                self._client_ip(),
+                {"status": status, "duration_ms": int((time.time() - started) * 1000), "players": player_count},
+            )
+
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             request = RecommendRequest.from_dict(payload)
+            player_count = len(request.steam_ids)
         except ValueError as exc:
+            status = "bad_request"
             self._json({"detail": str(exc)}, HTTPStatus.BAD_REQUEST)
+            track()
             return
 
         if not _RECOMMEND_SLOTS.acquire(blocking=False):
+            status = "busy"
             self._json(
                 {"detail": "服务器繁忙：同时计算的推荐请求已达上限，请稍后重试。"},
                 HTTPStatus.SERVICE_UNAVAILABLE,
             )
+            track()
             return
         try:
             future = asyncio.run_coroutine_threadsafe(run_recommendation(request), _LOOP)
@@ -86,17 +123,23 @@ class AppHandler(SimpleHTTPRequestHandler):
                 response = future.result(timeout=RECOMMENDATION_TIMEOUT_SECONDS)
             except concurrent.futures.TimeoutError:
                 future.cancel()
+                status = "timeout"
                 self._json({"detail": "推荐计算超时，请稍后重试。"}, HTTPStatus.GATEWAY_TIMEOUT)
                 return
+            status = "ok"
             self._json(response.to_dict())
         except ValueError as exc:
+            status = "bad_request"
             self._json({"detail": str(exc)}, HTTPStatus.BAD_REQUEST)
         except RecommendationError as exc:
+            status = "unprocessable"
             self._json({"detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         except Exception as exc:
+            status = "error"
             self._json({"detail": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
         finally:
             _RECOMMEND_SLOTS.release()
+            track()
 
     def log_message(self, format: str, *args: Any) -> None:
         print(f"{self.address_string()} - {format % args}")
@@ -109,7 +152,7 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _file(self, path: Path, content_type: str) -> None:
+    def _file(self, path: Path, content_type: str, extra_headers: dict[str, str] | None = None) -> None:
         if not path.exists() or not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -117,6 +160,36 @@ class AppHandler(SimpleHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (extra_headers or {}).items():
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _visitor(self) -> tuple[str, bool]:
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        morsel = cookie.get("srvid")
+        if morsel and morsel.value:
+            return morsel.value[:64], False
+        return uuid.uuid4().hex, True
+
+    def _client_ip(self) -> str:
+        return self.headers.get("X-Real-IP") or self.client_address[0]
+
+    def _stats(self) -> None:
+        token = ""
+        if "?" in self.path:
+            for pair in self.path.split("?", 1)[1].split("&"):
+                if pair.startswith("token="):
+                    token = pair.removeprefix("token=")
+        if not STATS_TOKEN or not hmac.compare_digest(token, STATS_TOKEN):
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        body = _render_stats(_ANALYTICS.summary()).encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Robots-Tag", "noindex")
         self.end_headers()
         self.wfile.write(body)
 
@@ -231,6 +304,51 @@ def _merge_status(*values: str) -> str:
             seen.add(cleaned)
             parts.append(cleaned)
     return " ".join(parts)
+
+
+def _render_stats(summary: dict[str, Any]) -> str:
+    totals = summary["totals"]
+    tz = timezone(timedelta(hours=STATS_TZ_OFFSET_HOURS))
+
+    def esc(value: Any) -> str:
+        return html.escape(str(value if value is not None else 0))
+
+    daily_rows = "".join(
+        f"<tr><td>{esc(row['day'])}</td><td>{esc(row['page_views'])}</td><td>{esc(row['unique_visitors'])}</td>"
+        f"<td>{esc(row['recommends'])}</td><td>{esc(row['recommend_ok'])}</td></tr>"
+        for row in summary["daily"]
+    )
+    recent_rows = "".join(
+        f"<tr><td>{datetime.fromtimestamp(row['ts'], tz).strftime('%m-%d %H:%M:%S')}</td>"
+        f"<td>{esc(row['event'])}</td><td>{esc((row['visitor'] or '-')[:8])}</td>"
+        f"<td>{esc(row['ip'] or '-')}</td><td>{esc(row['meta'] or '')}</td></tr>"
+        for row in summary["recent"]
+    )
+    return f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="robots" content="noindex">
+<title>访问统计</title>
+<style>
+body {{ background: #0d1117; color: #d8dee9; font: 14px/1.6 system-ui, sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; }}
+h1, h2 {{ color: #7ce0d3; font-size: 18px; }}
+table {{ border-collapse: collapse; width: 100%; margin-bottom: 24px; }}
+th, td {{ border: 1px solid #2b3440; padding: 6px 10px; text-align: left; word-break: break-all; }}
+th {{ background: #161c26; }}
+.cards {{ display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }}
+.card {{ background: #161c26; border: 1px solid #2b3440; border-radius: 8px; padding: 12px 18px; }}
+.card b {{ display: block; font-size: 22px; color: #7ce0d3; }}
+</style></head><body>
+<h1>Steam 群体推荐 · 访问统计</h1>
+<div class="cards">
+<div class="card"><b>{esc(totals['page_views'])}</b>页面访问</div>
+<div class="card"><b>{esc(totals['unique_visitors'])}</b>独立访客(cookie)</div>
+<div class="card"><b>{esc(totals['recommends'])}</b>推荐执行</div>
+<div class="card"><b>{esc(totals['recommend_ok'])}</b>推荐成功</div>
+</div>
+<h2>最近 30 天(UTC{STATS_TZ_OFFSET_HOURS:+d})</h2>
+<table><tr><th>日期</th><th>页面访问</th><th>独立访客</th><th>推荐执行</th><th>推荐成功</th></tr>{daily_rows or '<tr><td colspan="5">暂无数据</td></tr>'}</table>
+<h2>最近 20 条事件</h2>
+<table><tr><th>时间</th><th>事件</th><th>访客</th><th>IP</th><th>详情</th></tr>{recent_rows or '<tr><td colspan="5">暂无数据</td></tr>'}</table>
+</body></html>"""
 
 
 def _content_type(relative: str) -> str:
