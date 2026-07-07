@@ -3,12 +3,21 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterable
 import json
+import time
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from .cache import GameCache
-from .config import GAME_RECORD_CACHE_VERSION, HTTP_TIMEOUT_SECONDS, STEAM_API_BASE, STEAM_STORE_BASE, STEAM_STORE_LANGUAGE
+from .config import (
+    GAME_RECORD_CACHE_VERSION,
+    HTTP_TIMEOUT_SECONDS,
+    STEAM_API_BASE,
+    STEAM_FETCH_CONCURRENCY,
+    STEAM_MISS_TTL_SECONDS,
+    STEAM_STORE_BASE,
+    STEAM_STORE_LANGUAGE,
+)
 from .localization import display_name
 from .models import GameRecord, OwnedGame, PlayerProfile
 
@@ -81,6 +90,17 @@ class SteamApiError(RuntimeError):
     pass
 
 
+# 全进程共享的 Steam 出站并发上限；依赖 app.py 的单一事件循环，多个并发请求共用同一配额。
+_fetch_semaphore: asyncio.Semaphore | None = None
+
+
+def _steam_semaphore() -> asyncio.Semaphore:
+    global _fetch_semaphore
+    if _fetch_semaphore is None:
+        _fetch_semaphore = asyncio.Semaphore(STEAM_FETCH_CONCURRENCY)
+    return _fetch_semaphore
+
+
 class SteamClient:
     def __init__(self, cache: GameCache | None = None) -> None:
         self.cache = cache or GameCache()
@@ -119,6 +139,8 @@ class SteamClient:
         if cached and cached.get("language") == STEAM_STORE_LANGUAGE and cached.get("cache_version") == GAME_RECORD_CACHE_VERSION:
             cached["source_marks"] = sorted(set(cached.get("source_marks", []) + (source_marks or [])))
             return GameRecord(**cached)
+        if self.cache.get_http(f"appdetails_miss:{appid}", max_age=STEAM_MISS_TTL_SECONDS):
+            return None
 
         detail_url = f"{STEAM_STORE_BASE}/api/appdetails"
         review_url = f"{STEAM_STORE_BASE}/appreviews/{appid}"
@@ -135,12 +157,15 @@ class SteamClient:
         detail_response, review_response = await asyncio.gather(detail_task, review_task, return_exceptions=True)
 
         if isinstance(detail_response, Exception):
+            self.cache.put_http(f"appdetails_miss:{appid}", {"miss": True})
             return None
         detail_body = detail_response.get(str(appid), {})
         if not detail_body.get("success"):
+            self.cache.put_http(f"appdetails_miss:{appid}", {"miss": True})
             return None
         data = detail_body.get("data", {})
         if data.get("type") != "game":
+            self.cache.put_http(f"appdetails_miss:{appid}", {"miss": True})
             return None
 
         categories = data.get("categories") or []
@@ -177,7 +202,7 @@ class SteamClient:
         return record
 
     async def app_details_many(self, appids: Iterable[int], source_map: dict[int, list[str]] | None = None) -> list[GameRecord]:
-        sem = asyncio.Semaphore(8)
+        sem = _steam_semaphore()
 
         async def fetch(appid: int) -> GameRecord | None:
             async with sem:
@@ -232,11 +257,19 @@ def _max_players_hint(categories: list[str]) -> int | None:
 
 def _get_json(url: str, params: dict[str, Any]) -> dict[str, Any]:
     full_url = f"{url}?{urlencode(params)}"
-    request = Request(full_url, headers={"User-Agent": "steam-group-rec/0.1"})
-    try:
-        with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
-        if getattr(exc, "code", None) == 403:
-            raise PermissionError from exc
-        raise
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        request = Request(full_url, headers={"User-Agent": "steam-group-rec/0.1"})
+        try:
+            with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            if code == 403:
+                raise PermissionError from exc
+            if code in (429, 500, 502, 503) and attempt < 2:
+                last_exc = exc
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    raise last_exc  # pragma: no cover

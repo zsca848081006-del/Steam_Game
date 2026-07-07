@@ -21,6 +21,14 @@ GAME_RECORD_CACHE_VERSION = 8
 CANDIDATE_POOL_TTL_SECONDS = int(os.getenv("STEAMREC_CANDIDATE_POOL_TTL", str(12 * 60 * 60)))
 INGEST_RECENT_MONTHS = int(os.getenv("STEAMREC_INGEST_RECENT_MONTHS", "18"))
 
+# appdetails 拉取失败(429/非游戏/下架)的负缓存，避免每个请求都重试同一批坏 appid。
+STEAM_MISS_TTL_SECONDS = int(os.getenv("STEAMREC_STEAM_MISS_TTL", str(6 * 60 * 60)))
+
+# 并发防护：Steam 出站并发是全进程共享的上限，不随请求数放大。
+STEAM_FETCH_CONCURRENCY = int(os.getenv("STEAMREC_STEAM_FETCH_CONCURRENCY", "8"))
+MAX_CONCURRENT_RECOMMENDATIONS = int(os.getenv("STEAMREC_MAX_CONCURRENT_RECS", "4"))
+RECOMMENDATION_TIMEOUT_SECONDS = float(os.getenv("STEAMREC_RECOMMENDATION_TIMEOUT", "240"))
+
 # DeepSeek key 由用户在网页填写、随单次请求转发，服务端不持有。
 DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")

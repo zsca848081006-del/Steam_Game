@@ -1,6 +1,17 @@
 # 交接
 
-## 最近做了什么(本轮:「只推全员都没有的」勾选项)
+## 最近做了什么(本轮:并发健壮性)
+
+- 保持标准库、不引第三方框架(本机 Python 3.14 编第三方包慢是既有约束,且瓶颈都在逻辑层)。改造为:单一共享 asyncio 事件循环(`app.py` 模块级 `_LOOP`,专用线程跑 `run_forever`,handler 用 `run_coroutine_threadsafe` 提交),替代原来每请求 `asyncio.run`。
+- 全进程共享 Steam 出站并发信号量(`steam_api._steam_semaphore`,默认 8,`STEAMREC_STEAM_FETCH_CONCURRENCY`),不再随请求数放大;共享循环的默认执行器固定 32 线程(2 核机默认只有 6,撑不起并发抓取+DeepSeek)。
+- 背压:同时计算的推荐请求上限默认 4(`STEAMREC_MAX_CONCURRENT_RECS`),超出立刻 503 中文提示;单请求超时 240 秒(`STEAMREC_RECOMMENDATION_TIMEOUT`,小于 nginx 的 300 秒)返回 504。
+- 候选池刷新加单飞锁(`ingest._refresh_lock` + 双检缓存),过期时只有一个请求真正去刷,避免惊群。
+- SQLite 开 WAL + busy_timeout 10s,并发读写不再互卡。
+- `_get_json` 对 429/5xx 重试(最多 3 次,退避 2/4 秒);配套 appdetails 负缓存(失败/非游戏 appid 记 6 小时,`STEAMREC_STEAM_MISS_TTL`),坏 appid 不会每个请求重试一遍。
+- 验证:热缓存单请求约 3.2 秒(无 AI);限 2 并发打 5 个 → 恰好 2×200 + 3×503(503 毫秒级返回),期间 /health 正常;连续请求槽位释放正常。
+- 测试踩坑:zsh 脚本里 `wait` 不带参数会连后台 server 一起等导致假"卡死";负缓存生效前,冷池刷新 + 429 重试叠加会让首次请求慢到分钟级。
+
+## 上一轮:「只推全员都没有的」勾选项
 
 - 前端新增勾选项「只推全员都没有的」(`#excludeOwned`,默认勾选),请求字段 `exclude_owned`(后端默认 true)。
 - 勾选时:候选只要有任何一名玩家拥有就被排除(主线档和尝鲜档都生效);不勾选时:恢复原行为,只排除全员都拥有的,部分人拥有的仍可推荐(补票开黑场景)。

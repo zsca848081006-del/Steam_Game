@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
+import threading
 from dataclasses import asdict, is_dataclass
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from steamrec.config import APP_HOST, APP_PORT, BASE_DIR, GAME_RECORD_CACHE_VERSION, STEAM_STORE_LANGUAGE
+from steamrec.config import (
+    APP_HOST,
+    APP_PORT,
+    BASE_DIR,
+    GAME_RECORD_CACHE_VERSION,
+    MAX_CONCURRENT_RECOMMENDATIONS,
+    RECOMMENDATION_TIMEOUT_SECONDS,
+    STEAM_STORE_LANGUAGE,
+)
 from steamrec.deepseek import refine_recommendations
 from steamrec.ingest import load_candidate_pools
 from steamrec.models import RecommendRequest, RecommendResponse
@@ -17,6 +27,16 @@ from steamrec.steam_api import SteamClient
 
 
 STATIC_DIR = BASE_DIR / "static"
+
+# 单一共享事件循环：所有推荐请求的协程都提交到这里，
+# 让 steam_api/ingest 里的全局信号量和单飞锁真正跨请求生效，也避免每个请求各建一套线程池。
+_LOOP = asyncio.new_event_loop()
+# 默认执行器按 CPU 数定容(2 核机器只有 6 线程)，撑不起全局 Steam 并发 + DeepSeek 阻塞调用，固定放大。
+_LOOP.set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=32, thread_name_prefix="steamrec-io"))
+threading.Thread(target=_LOOP.run_forever, name="steamrec-loop", daemon=True).start()
+
+# 背压：同时计算的推荐请求上限，超出直接返回 503，不排队占线程。
+_RECOMMEND_SLOTS = threading.BoundedSemaphore(MAX_CONCURRENT_RECOMMENDATIONS)
 
 
 class AppHandler(SimpleHTTPRequestHandler):
@@ -50,7 +70,24 @@ class AppHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             request = RecommendRequest.from_dict(payload)
-            response = asyncio.run(run_recommendation(request))
+        except ValueError as exc:
+            self._json({"detail": str(exc)}, HTTPStatus.BAD_REQUEST)
+            return
+
+        if not _RECOMMEND_SLOTS.acquire(blocking=False):
+            self._json(
+                {"detail": "服务器繁忙：同时计算的推荐请求已达上限，请稍后重试。"},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+            return
+        try:
+            future = asyncio.run_coroutine_threadsafe(run_recommendation(request), _LOOP)
+            try:
+                response = future.result(timeout=RECOMMENDATION_TIMEOUT_SECONDS)
+            except concurrent.futures.TimeoutError:
+                future.cancel()
+                self._json({"detail": "推荐计算超时，请稍后重试。"}, HTTPStatus.GATEWAY_TIMEOUT)
+                return
             self._json(response.to_dict())
         except ValueError as exc:
             self._json({"detail": str(exc)}, HTTPStatus.BAD_REQUEST)
@@ -58,6 +95,8 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._json({"detail": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         except Exception as exc:
             self._json({"detail": f"internal error: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        finally:
+            _RECOMMEND_SLOTS.release()
 
     def log_message(self, format: str, *args: Any) -> None:
         print(f"{self.address_string()} - {format % args}")

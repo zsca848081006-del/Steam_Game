@@ -48,21 +48,29 @@ class SearchItem:
         return (today.year - year) * 12 + (today.month - month) <= months
 
 
+# 单飞锁：池子过期时只允许一个请求去刷新，其余请求等它完成后直接读缓存，避免惊群打爆 Steam。
+_refresh_lock = asyncio.Lock()
+
+
 async def load_candidate_pools(cache: GameCache) -> tuple[dict[int, list[str]], dict[int, list[str]], str]:
     """返回 (动态主候选, 动态尝鲜候选, 状态说明)；失败时回退陈旧缓存或空池。"""
     cached = cache.get_http(POOL_CACHE_KEY, max_age=CANDIDATE_POOL_TTL_SECONDS)
     if cached:
         return _decode_pool(cached["main"]), _decode_pool(cached["fresh"]), "候选池来自缓存。"
 
-    try:
-        main, fresh = await asyncio.to_thread(_build_pools)
-        cache.put_http(POOL_CACHE_KEY, {"main": _encode_pool(main), "fresh": _encode_pool(fresh)})
-        return main, fresh, f"候选池已刷新：主线 {len(main)} 个，尝鲜 {len(fresh)} 个。"
-    except Exception as exc:
-        stale = cache.get_http(POOL_CACHE_KEY, max_age=None)
-        if stale:
-            return _decode_pool(stale["main"]), _decode_pool(stale["fresh"]), f"候选池刷新失败，使用陈旧缓存：{exc}"
-        return {}, {}, f"候选池刷新失败，仅使用静态种子：{exc}"
+    async with _refresh_lock:
+        cached = cache.get_http(POOL_CACHE_KEY, max_age=CANDIDATE_POOL_TTL_SECONDS)
+        if cached:
+            return _decode_pool(cached["main"]), _decode_pool(cached["fresh"]), "候选池来自缓存。"
+        try:
+            main, fresh = await asyncio.to_thread(_build_pools)
+            cache.put_http(POOL_CACHE_KEY, {"main": _encode_pool(main), "fresh": _encode_pool(fresh)})
+            return main, fresh, f"候选池已刷新：主线 {len(main)} 个，尝鲜 {len(fresh)} 个。"
+        except Exception as exc:
+            stale = cache.get_http(POOL_CACHE_KEY, max_age=None)
+            if stale:
+                return _decode_pool(stale["main"]), _decode_pool(stale["fresh"]), f"候选池刷新失败，使用陈旧缓存：{exc}"
+            return {}, {}, f"候选池刷新失败，仅使用静态种子：{exc}"
 
 
 def _build_pools() -> tuple[dict[int, list[str]], dict[int, list[str]]]:
