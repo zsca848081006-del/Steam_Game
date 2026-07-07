@@ -92,7 +92,13 @@ class AppHandler(SimpleHTTPRequestHandler):
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
+    # 前端漏斗事件白名单：输入框首次输入 / 点击生成 / 被前端校验拦下 / 前端收到错误。
+    TRACK_EVENTS = {"ids_input", "submit_click", "client_blocked", "client_error"}
+
     def do_POST(self) -> None:
+        if self.path == "/api/track":
+            self._track()
+            return
         if self.path != "/api/recommend":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -179,6 +185,24 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
+
+    def _track(self) -> None:
+        try:
+            length = min(int(self.headers.get("Content-Length", "0")), 4096)
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            event = str(payload.get("event", ""))
+            if event not in self.TRACK_EVENTS:
+                self._json({"ok": False}, HTTPStatus.BAD_REQUEST)
+                return
+            meta = payload.get("meta")
+            meta = meta if isinstance(meta, dict) else {}
+            if len(json.dumps(meta, ensure_ascii=False)) > 1200:
+                meta = {"truncated": json.dumps(meta, ensure_ascii=False)[:1200]}
+            visitor, _ = self._visitor()
+            _ANALYTICS.log(event, visitor, self._client_ip(), meta)
+        except Exception:
+            pass
+        self._json({"ok": True})
 
     def _visitor(self) -> tuple[str, bool]:
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
@@ -401,6 +425,10 @@ th {{ background: #161c26; }}
 <div class="cards">
 <div class="card"><b>{esc(totals['page_views'])}</b>页面访问</div>
 <div class="card"><b>{esc(totals['unique_visitors'])}</b>独立访客(cookie)</div>
+<div class="card"><b>{esc(totals['ids_inputs'])}</b>动过输入框</div>
+<div class="card"><b>{esc(totals['submit_clicks'])}</b>点击生成</div>
+<div class="card"><b>{esc(totals['client_blocked'])}</b>前端拦截</div>
+<div class="card"><b>{esc(totals['client_errors'])}</b>前端报错</div>
 <div class="card"><b>{esc(totals['recommends'])}</b>推荐执行</div>
 <div class="card"><b>{esc(totals['recommend_ok'])}</b>推荐成功</div>
 </div>

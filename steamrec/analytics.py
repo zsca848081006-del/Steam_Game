@@ -56,6 +56,10 @@ class Analytics:
                     SUM(event = 'page_view') AS page_views,
                     SUM(event = 'recommend') AS recommends,
                     SUM(event = 'recommend' AND meta LIKE '%"status": "ok"%') AS recommend_ok,
+                    SUM(event = 'ids_input') AS ids_inputs,
+                    SUM(event = 'submit_click') AS submit_clicks,
+                    SUM(event = 'client_blocked') AS client_blocked,
+                    SUM(event = 'client_error') AS client_errors,
                     COUNT(DISTINCT visitor) AS unique_visitors
                 FROM events
                 """

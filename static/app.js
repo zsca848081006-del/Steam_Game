@@ -25,6 +25,19 @@ const tagSuggestions = [
 
 steamKeyInput.value = sessionStorage.getItem("steam_api_key") || "";
 deepseekKeyInput.value = sessionStorage.getItem("deepseek_api_key") || "";
+
+function track(event, meta) {
+  try {
+    fetch("/api/track", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({event, meta: meta || {}}),
+      keepalive: true
+    });
+  } catch (e) { /* 埋点失败不影响功能 */ }
+}
+
+steamIdsInput.addEventListener("input", () => track("ids_input", {}), {once: true});
 tagSuggestionsEl.innerHTML = tagSuggestions.map((tag) => `<option value="${escapeHtml(tag)}"></option>`).join("");
 setupTagHints(boostTagsInput, boostTagHintsEl);
 setupTagHints(passTagsInput, passTagHintsEl);
@@ -39,8 +52,18 @@ runButton.addEventListener("click", async () => {
   const boost_tags = splitTags(boostTagsInput.value);
   const pass_tags = splitTags(passTagsInput.value);
 
+  track("submit_click", {
+    entries: steam_ids.length,
+    sample: steam_ids.slice(0, 5),
+    has_own_key: !!steam_api_key,
+    has_ai_key: !!deepseek_api_key,
+    include_fresh,
+    exclude_owned
+  });
+
   if (steam_ids.length < 2) {
     statusEl.textContent = "至少输入 2 个 Steam ID 或个人主页链接。";
+    track("client_blocked", {reason: "ids_less_than_2", entries: steam_ids.length, raw: steamIdsInput.value.slice(0, 300)});
     return;
   }
 
@@ -79,6 +102,7 @@ runButton.addEventListener("click", async () => {
     const ai = data.ai_status ? ` ${data.ai_status}` : "";
     statusEl.textContent = `完成：有效玩家 ${data.valid_players.length} 人${excluded}。${ai}`;
   } catch (error) {
+    track("client_error", {code: error.code || "", message: String(error.message).slice(0, 200)});
     if (error.code === "fallback_key_failed" || error.code === "user_key_needed") {
       statusEl.innerHTML = `${escapeHtml(error.message)} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer">点这里申请自己的 key</a>`;
       steamKeyInput.focus();
